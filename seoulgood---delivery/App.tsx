@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { ShoppingCart, MapPin, Send, MessageCircle, MessageSquare, X, Plus, Minus, Search, Loader2, Info, ChevronRight, Store, RotateCcw, ChevronDown, QrCode, Settings, Lock, Save, Upload, Image as ImageIcon, Trash2 } from 'lucide-react';
+import { ShoppingCart, MapPin, Send, MessageCircle, MessageSquare, X, Plus, Minus, Search, Loader2, Info, ChevronRight, Store, RotateCcw, ChevronDown, QrCode, Settings, Lock, Save, Upload, Image as ImageIcon, Trash2, KeyRound, ThumbsUp } from 'lucide-react';
 import { MenuItem, CartItem, LocationState } from './types';
 import { fetchMenuFromSheet } from './services/menuService';
 import { getFoodRecommendation } from './services/geminiService';
@@ -67,6 +67,37 @@ const compressImage = (file: File): Promise<string> => {
   });
 };
 
+// Helper: Copy Image to Clipboard (Handles iOS/Android compatibility by converting to PNG Blob)
+const copyImageToClipboard = async (imageSrc: string) => {
+    try {
+        const blob = await new Promise<Blob | null>((resolve) => {
+            const img = new Image();
+            img.crossOrigin = "anonymous";
+            img.src = imageSrc;
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = img.width;
+                canvas.height = img.height;
+                const ctx = canvas.getContext('2d');
+                ctx?.drawImage(img, 0, 0);
+                // Clipboard API requires PNG in most cases (especially iOS Safari)
+                canvas.toBlob(resolve, 'image/png');
+            };
+            img.onerror = () => resolve(null);
+        });
+
+        if (blob) {
+            await navigator.clipboard.write([
+                new ClipboardItem({ 'image/png': blob })
+            ]);
+            return true;
+        }
+    } catch (error) {
+        console.error("Clipboard Error:", error);
+    }
+    return false;
+};
+
 const App: React.FC = () => {
   const [menu, setMenu] = useState<MenuItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -82,6 +113,7 @@ const App: React.FC = () => {
   const [localLogo, setLocalLogo] = useState(() => getSafeStorage('app_logo'));
   const [localQr, setLocalQr] = useState(() => getSafeStorage('app_qr'));
   const [localLineId, setLocalLineId] = useState(() => getSafeStorage('app_line_id'));
+  const [localApiKey, setLocalApiKey] = useState(() => getSafeStorage('app_api_key'));
 
   // Clean Line ID Helper
   const cleanLineId = (id: string | undefined | null) => {
@@ -102,6 +134,7 @@ const App: React.FC = () => {
   const logoSource = localLogo ? 'Local' : sheetConfig.logoUrl ? 'Sheet' : 'Default';
   const qrSource = localQr ? 'Local' : sheetConfig.qrCodeUrl ? 'Sheet' : 'Default';
   const lineSource = localLineId ? 'Local' : sheetConfig.lineOaId ? 'Sheet' : 'None';
+  const apiKeySource = localApiKey ? 'Local (Settings)' : process.env.API_KEY ? 'System (Env)' : 'Missing';
 
   // Admin / Config Modal State
   const [showLogin, setShowLogin] = useState(false);
@@ -112,6 +145,7 @@ const App: React.FC = () => {
   const [editLogoUrl, setEditLogoUrl] = useState('');
   const [editQrUrl, setEditQrUrl] = useState('');
   const [editLineId, setEditLineId] = useState('');
+  const [editApiKey, setEditApiKey] = useState('');
 
   // Item Detail Modal State
   const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
@@ -151,6 +185,7 @@ const App: React.FC = () => {
       setEditLogoUrl(finalLogoUrl);
       setEditQrUrl(finalQrUrl);
       setEditLineId(finalLineId);
+      setEditApiKey(localApiKey || '');
       setShowConfig(true);
       // Clear credentials
       setUsername('');
@@ -171,15 +206,17 @@ const App: React.FC = () => {
         setLocalLogo(editLogoUrl);
         setLocalQr(editQrUrl);
         setLocalLineId(editLineId);
+        setLocalApiKey(editApiKey);
         
         // 2. Save to Local Storage
         localStorage.setItem('app_logo', editLogoUrl);
         localStorage.setItem('app_qr', editQrUrl);
-        if (editLineId) {
-            localStorage.setItem('app_line_id', editLineId);
-        } else {
-            localStorage.removeItem('app_line_id');
-        }
+        
+        if (editLineId) localStorage.setItem('app_line_id', editLineId);
+        else localStorage.removeItem('app_line_id');
+
+        if (editApiKey) localStorage.setItem('app_api_key', editApiKey);
+        else localStorage.removeItem('app_api_key');
         
         setShowConfig(false);
         
@@ -197,9 +234,13 @@ const App: React.FC = () => {
         setLocalLogo(null);
         setLocalQr(null);
         setLocalLineId(null);
+        setLocalApiKey(null);
+        
         localStorage.removeItem('app_logo');
         localStorage.removeItem('app_qr');
         localStorage.removeItem('app_line_id');
+        localStorage.removeItem('app_api_key');
+        
         // Reload to apply reset
         window.location.reload();
     }
@@ -342,7 +383,8 @@ const App: React.FC = () => {
   const handleAiAsk = async () => {
     if (!aiQuery.trim()) return;
     setIsAiLoading(true);
-    const answer = await getFoodRecommendation(aiQuery, menu);
+    // Pass the local API key to the service
+    const answer = await getFoodRecommendation(aiQuery, menu, localApiKey || undefined);
     setAiResponse(answer);
     setIsAiLoading(false);
   };
@@ -368,7 +410,7 @@ const App: React.FC = () => {
       msg += `\n   ${item.price * item.quantity}฿\n`;
     });
     msg += `\n💰 *Total: ${total} THB*`;
-    msg += `\n🧾 Payment Slip: (Attached in Chat)`;
+    msg += `\n🧾 Payment Slip: (Paste image here)`;
     
     return encodeURIComponent(msg);
   };
@@ -389,7 +431,13 @@ const App: React.FC = () => {
     setShowConfirmModal(true);
   };
 
-  const handleFinalLineRedirect = () => {
+  const handleFinalLineRedirect = async () => {
+        // 1. Try to copy the slip image to clipboard first
+        if (slipPreview) {
+            await copyImageToClipboard(slipPreview);
+        }
+
+        // 2. Prepare message
         const message = generateLineMessage();
         let targetUrl = '';
 
@@ -402,8 +450,8 @@ const App: React.FC = () => {
             targetUrl = `https://line.me/R/msg/text/?${message}`;
         }
         
+        // 3. Redirect
         // Use window.location.href instead of window.open for better mobile deep-linking support
-        // This avoids popup blockers on mobile browsers
         window.location.href = targetUrl;
         
         // Optionally close modal after a moment
@@ -533,8 +581,29 @@ const App: React.FC = () => {
                 <div className="space-y-6">
                     <div className="bg-blue-50 p-3 rounded-lg border border-blue-100">
                         <p className="text-xs text-blue-800">
-                            <strong>Note:</strong> หากต้องการเปลี่ยนให้ลูกค้าทุกคนเห็น กรุณาแก้ใน <strong>Google Sheet</strong> (หมวด Setting).<br/>
-                            การกด Save ที่นี่จะจำค่า <strong>เฉพาะเครื่องนี้</strong> เท่านั้น
+                            <strong>Note:</strong> ค่าที่ตั้งที่นี่จะบันทึกใน <strong>เครื่องนี้เท่านั้น</strong> (LocalStorage) เหมาะสำหรับเจ้าของร้านที่ต้องการทดสอบหรือแก้ไขด่วน
+                        </p>
+                    </div>
+
+                    {/* API Key Editor (NEW) */}
+                    <div className="space-y-2 border-b border-gray-100 pb-4">
+                        <div className="flex justify-between items-end">
+                             <label className="block text-sm font-bold text-gray-700 flex items-center gap-1">
+                                <KeyRound size={14} className="text-orange-500"/> Gemini API Key
+                             </label>
+                             <span className={`text-[10px] px-2 py-0.5 rounded-full ${apiKeySource.includes('Local') ? 'bg-orange-100 text-orange-600' : apiKeySource.includes('System') ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
+                                 Status: {apiKeySource}
+                             </span>
+                        </div>
+                        <input 
+                            type="password"
+                            value={editApiKey}
+                            onChange={(e) => setEditApiKey(e.target.value)}
+                            placeholder="AIzaSy..."
+                            className="w-full p-2 border border-gray-300 rounded-lg text-sm font-mono"
+                        />
+                         <p className="text-xs text-gray-500">
+                           *ใส่ Key ที่นี่เพื่อใช้งาน AI บนเครื่องนี้ (ไม่ต้องแก้โค้ด/Redeploy)
                         </p>
                     </div>
 
@@ -711,15 +780,23 @@ const App: React.FC = () => {
             <div 
                 key={item.id} 
                 onClick={() => openItemModal(item)}
-                className="bg-white rounded-xl p-3 shadow-sm border border-gray-100 flex gap-3 hover:shadow-md transition cursor-pointer active:scale-[0.99]"
+                className="bg-white rounded-xl p-3 shadow-sm border border-gray-100 flex gap-3 hover:shadow-md transition cursor-pointer active:scale-[0.99] relative overflow-hidden"
             >
               {/* Image */}
               <div className="w-24 h-24 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0 relative">
                  <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
                  {item.isSpicy && (
-                     <span className="absolute top-1 right-1 bg-red-500 text-white text-[8px] px-1.5 py-0.5 rounded-full font-bold shadow-sm">
+                     <span className="absolute top-1 right-1 bg-red-500 text-white text-[8px] px-1.5 py-0.5 rounded-full font-bold shadow-sm z-10">
                          Spicy
                      </span>
+                 )}
+                 {/* RECOMMENDED BADGE (New Feature) */}
+                 {item.isRecommended && (
+                     <div className="absolute top-2 left-2 z-10">
+                        <div className="bg-yellow-400 text-red-600 p-1.5 rounded-full shadow-lg border-2 border-white animate-bounce flex items-center justify-center">
+                           <ThumbsUp size={18} strokeWidth={3} fill="currentColor" />
+                        </div>
+                     </div>
                  )}
               </div>
               
@@ -782,8 +859,15 @@ const App: React.FC = () => {
                           <X size={24} />
                       </button>
 
-                      <div className="w-20 h-20 rounded-lg overflow-hidden shrink-0 border border-gray-100">
+                      <div className="w-20 h-20 rounded-lg overflow-hidden shrink-0 border border-gray-100 relative">
                           <img src={selectedItem.image} alt={selectedItem.name} className="w-full h-full object-cover"/>
+                          {selectedItem.isRecommended && (
+                             <div className="absolute top-2 left-2 z-10">
+                                 <div className="bg-yellow-400 text-red-600 p-2 rounded-full shadow-lg border-2 border-white">
+                                     <ThumbsUp size={20} fill="currentColor" />
+                                 </div>
+                             </div>
+                          )}
                       </div>
                       <div className="flex-1 pr-6 pt-1">
                           <h2 className="text-xl font-bold text-gray-800 leading-tight">{selectedItem.name}</h2>
@@ -1128,7 +1212,7 @@ const App: React.FC = () => {
                             </p>
                             <p className="flex items-start gap-2">
                                 <span className="text-red-500 font-bold">3.</span>
-                                <span className="font-bold text-red-600">สำคัญ! อย่าลืมกดส่ง "รูปสลิป" ที่คุณเลือกไว้ในแชทอีกครั้ง</span>
+                                <span className="font-bold text-red-600">สำคัญ! ระบบก๊อปปี้รูปสลิปให้แล้ว กด "วาง" (Paste) ในแชทได้เลย</span>
                             </p>
                         </div>
                         

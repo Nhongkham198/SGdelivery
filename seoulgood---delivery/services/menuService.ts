@@ -146,6 +146,10 @@ export const fetchMenuFromSheet = async (): Promise<MenuData> => {
               const price = getValue(['price', 'cost', 'ราคา', 'บาท'], ['option']);
               const desc = getValue(['description', 'detail', 'รายละเอียด', 'ส่วนประกอบ', 'คำอธิบาย']);
               
+              // NEW: Check for Recommended status
+              const recommendedVal = getValue(['เมนูแนะนำ', 'recommended', 'recommend', 'best seller', 'signature', 'แนะนำ']);
+              const isRec = recommendedVal && (String(recommendedVal).toLowerCase().includes('yes') || String(recommendedVal).toLowerCase() === 'true');
+              
               const finalImg = processedImg || `https://picsum.photos/seed/${name.replace(/\s/g, '')}/300/200`;
 
               groupedItems[name] = {
@@ -156,6 +160,7 @@ export const fetchMenuFromSheet = async (): Promise<MenuData> => {
                 description: desc ? String(desc) : undefined,
                 image: finalImg,
                 isSpicy: name.includes('Spicy') || (desc && String(desc).includes('พริก')) || name.includes('ต้มยำ') || name.includes('เผ็ด'),
+                isRecommended: isRec,
                 options: []
               };
           }

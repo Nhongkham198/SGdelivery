@@ -1,18 +1,13 @@
 import { GoogleGenAI } from "@google/genai";
 import { MenuItem } from '../types';
 
-let geminiClient: GoogleGenAI | null = null;
+export const getFoodRecommendation = async (userQuery: string, menu: MenuItem[], apiKey?: string): Promise<string> => {
+  // Priority: 1. Key passed from App Settings (LocalStorage) 2. Key from Build Environment
+  const keyToUse = apiKey || process.env.API_KEY;
 
-const getClient = () => {
-  if (!geminiClient && process.env.API_KEY) {
-    geminiClient = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  if (!keyToUse) {
+     return "กรุณาตั้งค่า API KEY ก่อนใช้งาน (ไปที่ปุ่มเฟือง -> Login -> ใส่ Gemini API Key)";
   }
-  return geminiClient;
-};
-
-export const getFoodRecommendation = async (userQuery: string, menu: MenuItem[]): Promise<string> => {
-  const client = getClient();
-  if (!client) return "กรุณาตั้งค่า API KEY เพื่อใช้งาน AI (Please configure API Key)";
 
   // Optimize token usage by sending a simplified menu list
   const simplifiedMenu = menu.map(m => `${m.name} (${m.price} THB) [${m.category}] - ${m.description || ''}`).join('\n');
@@ -33,6 +28,9 @@ export const getFoodRecommendation = async (userQuery: string, menu: MenuItem[])
   `;
 
   try {
+    // Create a fresh client instance with the selected key
+    const client = new GoogleGenAI({ apiKey: keyToUse });
+    
     const response = await client.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: prompt,
@@ -40,6 +38,6 @@ export const getFoodRecommendation = async (userQuery: string, menu: MenuItem[])
     return response.text || "ขออภัย ระบบขัดข้องชั่วคราว (AI Error)";
   } catch (error) {
     console.error("Gemini Error:", error);
-    return "ขออภัย ไม่สามารถเชื่อมต่อกับ AI ได้ในขณะนี้";
+    return "ขออภัย ไม่สามารถเชื่อมต่อกับ AI ได้ในขณะนี้ (ตรวจสอบ API Key)";
   }
 };

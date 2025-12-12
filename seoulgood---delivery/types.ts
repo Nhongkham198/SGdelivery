@@ -1,3 +1,4 @@
+
 export interface MenuChoice {
   name: string;
   priceModifier: number;
@@ -16,6 +17,7 @@ export interface MenuItem {
   description?: string;
   image?: string;
   isSpicy?: boolean;
+  isRecommended?: boolean; // New field for Recommended items
   options?: MenuOption[]; // New field for options
 }
 
