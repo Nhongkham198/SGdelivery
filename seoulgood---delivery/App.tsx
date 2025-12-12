@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { ShoppingCart, MapPin, Send, MessageCircle, MessageSquare, X, Plus, Minus, Search, Loader2, Info, ChevronRight, Store, RotateCcw, ChevronDown, QrCode, Settings, Lock, Save, Upload, Image as ImageIcon, Trash2, KeyRound, ThumbsUp, Copy, Check } from 'lucide-react';
+import { ShoppingCart, MapPin, Send, MessageSquare, X, Plus, Minus, Search, Loader2, ChevronRight, Store, RotateCcw, ChevronDown, QrCode, Upload, Image as ImageIcon, Trash2, ThumbsUp, Copy, Check } from 'lucide-react';
 import { MenuItem, CartItem, LocationState } from './types';
 import { fetchMenuFromSheet } from './services/menuService';
-import { getFoodRecommendation } from './services/geminiService';
 import { MapPicker } from './components/MapPicker';
 
 // --- Assets ---
@@ -70,6 +69,9 @@ const compressImage = (file: File): Promise<string> => {
 // Helper: Copy Image to Clipboard (Handles iOS/Android compatibility by converting to PNG Blob)
 const copyImageToClipboard = async (imageSrc: string) => {
     try {
+        // Check availability
+        if (!navigator.clipboard?.write) return false;
+
         const blob = await new Promise<Blob | null>((resolve) => {
             const img = new Image();
             img.crossOrigin = "anonymous";
@@ -79,9 +81,13 @@ const copyImageToClipboard = async (imageSrc: string) => {
                 canvas.width = img.width;
                 canvas.height = img.height;
                 const ctx = canvas.getContext('2d');
-                ctx?.drawImage(img, 0, 0);
-                // Clipboard API requires PNG in most cases (especially iOS Safari)
-                canvas.toBlob(resolve, 'image/png');
+                if (ctx) {
+                    ctx.drawImage(img, 0, 0);
+                    // Clipboard API prefers PNG
+                    canvas.toBlob(resolve, 'image/png');
+                } else {
+                    resolve(null);
+                }
             };
             img.onerror = () => resolve(null);
         });
@@ -109,11 +115,10 @@ const App: React.FC = () => {
   // Priority: LocalStorage (Admin Override) -> Google Sheet (Global) -> Default
   const [sheetConfig, setSheetConfig] = useState<{logoUrl?: string, qrCodeUrl?: string, lineOaId?: string}>({});
   
-  // Initialize from storage safely
-  const [localLogo, setLocalLogo] = useState(() => getSafeStorage('app_logo'));
-  const [localQr, setLocalQr] = useState(() => getSafeStorage('app_qr'));
-  const [localLineId, setLocalLineId] = useState(() => getSafeStorage('app_line_id'));
-  const [localApiKey, setLocalApiKey] = useState(() => getSafeStorage('app_api_key'));
+  // Initialize from storage safely (Read-only as UI is removed)
+  const [localLogo] = useState(() => getSafeStorage('app_logo'));
+  const [localQr] = useState(() => getSafeStorage('app_qr'));
+  const [localLineId] = useState(() => getSafeStorage('app_line_id'));
 
   // Clean Line ID Helper
   const cleanLineId = (id: string | undefined | null) => {
@@ -130,25 +135,6 @@ const App: React.FC = () => {
   const finalQrUrl = localQr || sheetConfig.qrCodeUrl || DEFAULT_QR;
   const finalLineId = cleanLineId(localLineId || sheetConfig.lineOaId);
 
-  // Determine Source for Display
-  const logoSource = localLogo ? 'Local' : sheetConfig.logoUrl ? 'Sheet' : 'Default';
-  const qrSource = localQr ? 'Local' : sheetConfig.qrCodeUrl ? 'Sheet' : 'Default';
-  const lineSource = localLineId ? 'Local' : sheetConfig.lineOaId ? 'Sheet' : 'None';
-  const apiKeySource = localApiKey ? 'Local (Settings)' : process.env.API_KEY ? 'System (Env)' : 'Missing';
-
-  // Admin / Config Modal State
-  const [showLogin, setShowLogin] = useState(false);
-  const [showConfig, setShowConfig] = useState(false);
-  const [showConfirmModal, setShowConfirmModal] = useState(false); // NEW STATE for Custom Modal
-  const [copyStatus, setCopyStatus] = useState<'idle' | 'success' | 'error'>('idle'); // State for Copy Feedback
-  
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [editLogoUrl, setEditLogoUrl] = useState('');
-  const [editQrUrl, setEditQrUrl] = useState('');
-  const [editLineId, setEditLineId] = useState('');
-  const [editApiKey, setEditApiKey] = useState('');
-
   // Item Detail Modal State
   const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
   const [tempQuantity, setTempQuantity] = useState(1);
@@ -161,13 +147,10 @@ const App: React.FC = () => {
   const [location, setLocation] = useState<LocationState | null>(null);
   const [slipPreview, setSlipPreview] = useState<string | null>(null);
   const [isProcessingSlip, setIsProcessingSlip] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   
-  // AI State
-  const [aiQuery, setAiQuery] = useState('');
-  const [aiResponse, setAiResponse] = useState('');
-  const [isAiLoading, setIsAiLoading] = useState(false);
-  const [showAi, setShowAi] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false); // Custom Modal
+  const [copyStatus, setCopyStatus] = useState<'idle' | 'success' | 'error'>('idle'); // State for Copy Feedback
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const loadData = async () => {
@@ -183,75 +166,6 @@ const App: React.FC = () => {
   useEffect(() => {
       if (showConfirmModal) setCopyStatus('idle');
   }, [showConfirmModal]);
-
-  // Admin Handlers
-  const handleAdminLogin = () => {
-    if (username === 'Sam' && password === '198') {
-      setShowLogin(false);
-      // Pre-fill with current visible values
-      setEditLogoUrl(finalLogoUrl);
-      setEditQrUrl(finalQrUrl);
-      setEditLineId(finalLineId);
-      setEditApiKey(localApiKey || '');
-      setShowConfig(true);
-      // Clear credentials
-      setUsername('');
-      setPassword('');
-    } else {
-      alert("Username หรือ Password ไม่ถูกต้อง");
-    }
-  };
-
-  const handleSaveConfig = () => {
-    try {
-        if (!editLogoUrl || !editQrUrl) {
-            alert("กรุณาใส่ลิงค์รูปภาพให้ครบถ้วน");
-            return;
-        }
-
-        // 1. Save to State
-        setLocalLogo(editLogoUrl);
-        setLocalQr(editQrUrl);
-        setLocalLineId(editLineId);
-        setLocalApiKey(editApiKey);
-        
-        // 2. Save to Local Storage
-        localStorage.setItem('app_logo', editLogoUrl);
-        localStorage.setItem('app_qr', editQrUrl);
-        
-        if (editLineId) localStorage.setItem('app_line_id', editLineId);
-        else localStorage.removeItem('app_line_id');
-
-        if (editApiKey) localStorage.setItem('app_api_key', editApiKey);
-        else localStorage.removeItem('app_api_key');
-        
-        setShowConfig(false);
-        
-        // 3. Force Reload to ensure persistence works
-        if(confirm("บันทึกข้อมูลเรียบร้อย! กด OK เพื่อรีโหลดหน้าจอและใช้งานค่าใหม่")) {
-             window.location.reload();
-        }
-    } catch (e) {
-        alert("เกิดข้อผิดพลาดในการบันทึก กรุณาลองใหม่");
-    }
-  };
-
-  const handleResetConfig = () => {
-    if(confirm("ต้องการล้างค่าที่ตั้งไว้ และกลับไปใช้ค่าจาก Google Sheet หรือ Default ใช่หรือไม่?")) {
-        setLocalLogo(null);
-        setLocalQr(null);
-        setLocalLineId(null);
-        setLocalApiKey(null);
-        
-        localStorage.removeItem('app_logo');
-        localStorage.removeItem('app_qr');
-        localStorage.removeItem('app_line_id');
-        localStorage.removeItem('app_api_key');
-        
-        // Reload to apply reset
-        window.location.reload();
-    }
-  };
 
   // Derived state for categories
   const categories = useMemo(() => {
@@ -387,15 +301,6 @@ const App: React.FC = () => {
   const total = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
 
-  const handleAiAsk = async () => {
-    if (!aiQuery.trim()) return;
-    setIsAiLoading(true);
-    // Pass the local API key to the service
-    const answer = await getFoodRecommendation(aiQuery, menu, localApiKey || undefined);
-    setAiResponse(answer);
-    setIsAiLoading(false);
-  };
-
   const generateLineMessage = () => {
     let msg = `🛒 *New Order from SeoulGood*\n\n`;
     msg += `👤 Customer: ${customerName}\n`;
@@ -446,7 +351,8 @@ const App: React.FC = () => {
           setCopyStatus('success');
       } else {
           setCopyStatus('error');
-          alert("ขออภัย! ระบบไม่สามารถคัดลอกรูปได้อัตโนมัติ \n\nกรุณาบันทึกรูปสลิปและกดส่งเองใน LINE");
+          // More informative alert for mobile users
+          alert("อุปกรณ์นี้ไม่รองรับการคัดลอกอัตโนมัติ \n\n👉 กรุณา 'กดค้างที่รูปสลิป' แล้วเลือก 'คัดลอก' (Copy) หรือ 'บันทึก' (Save) เองนะครับ");
       }
   };
 
@@ -486,8 +392,8 @@ const App: React.FC = () => {
     <div className="min-h-screen pb-32 relative max-w-5xl mx-auto bg-gray-50 shadow-xl overflow-hidden">
       
       {/* Header */}
-      <header className="sticky top-0 z-40 bg-white shadow-sm px-4 py-2 flex justify-between items-center">
-        <div className="flex items-center gap-3">
+      <header className="sticky top-0 z-40 bg-white shadow-sm px-4 py-2 flex items-center gap-2">
+        <div className="flex items-center gap-3 mr-auto">
             {/* Logo Image */}
             <div className="h-16 w-auto flex items-center justify-center shadow-sm hover:scale-105 transition-transform">
                 <img 
@@ -501,7 +407,26 @@ const App: React.FC = () => {
                  <p className="text-xs text-orange-600 font-medium mt-0.5">ต้นตำหรับอาหารเกาหลี</p>
             </div>
         </div>
-        <div className="flex gap-2">
+
+        {/* NEW: Delivery Notice Badge */}
+        <div className="flex justify-end items-center">
+            <div className="bg-orange-50 border border-orange-100 rounded-lg px-3 py-1.5 flex items-center gap-2 shadow-sm">
+                <div className="bg-orange-500 rounded-full p-1 shrink-0 flex items-center justify-center shadow-sm">
+                    {/* Scooter/Motorcycle Icon */}
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white" className="w-3 h-3">
+                         <path d="M19.5 6.5h-3c-1.1 0-2 .9-2 2v2.5h-3v-1c0-.55-.45-1-1-1s-1 .45-1 1v1H8v-1c0-.55-.45-1-1-1s-1 .45-1 1v2.35c-2.3.65-4 2.75-4 5.15 0 2.95 2.6 5.35 5.75 5.5h6.5c3.15-.15 5.75-2.55 5.75-5.5 0-2.4-1.7-4.5-4-5.15V8.5c0-.55-.45-1-1-1zm-11 9.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm10 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/>
+                    </svg>
+                </div>
+                <span className="text-[10px] sm:text-xs font-bold text-orange-700 leading-tight hidden sm:inline">
+                    ระบบนี้ใช้เฉพาะการส่ง Delivery เท่านั้น
+                </span>
+                <span className="text-[10px] font-bold text-orange-700 leading-tight sm:hidden">
+                    Delivery Only
+                </span>
+            </div>
+        </div>
+
+        <div className="flex gap-2 shrink-0">
             {/* LINE Contact Button - Only if ID is set */}
             {finalLineId && (
                 <a 
@@ -514,228 +439,8 @@ const App: React.FC = () => {
                     <MessageSquare size={22} />
                 </a>
             )}
-
-            <button 
-                onClick={() => setShowAi(!showAi)}
-                className={`p-2 rounded-full transition ${showAi ? 'bg-orange-100 text-orange-600' : 'bg-gray-100 text-gray-600'}`}
-                title="AI Assistant"
-            >
-                <MessageCircle size={22} />
-            </button>
-            <button 
-                onClick={() => setShowLogin(true)}
-                className="p-2 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 transition"
-            >
-                <Settings size={22} />
-            </button>
         </div>
       </header>
-
-      {/* Admin Login Modal */}
-      {showLogin && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in">
-            <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl">
-                <div className="flex justify-between items-center mb-4">
-                    <h3 className="font-bold text-lg flex items-center gap-2 text-gray-800">
-                        <Lock size={20} className="text-orange-600"/> Admin Login
-                    </h3>
-                    <button onClick={() => setShowLogin(false)} className="text-gray-400 hover:text-gray-600">
-                        <X size={24}/>
-                    </button>
-                </div>
-                <div className="space-y-4">
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
-                        <input 
-                            type="text"
-                            value={username}
-                            onChange={(e) => setUsername(e.target.value)}
-                            className="w-full p-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-orange-500"
-                            placeholder="Enter username"
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-                        <input 
-                            type="password"
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            className="w-full p-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-orange-500"
-                            placeholder="Enter password"
-                        />
-                    </div>
-                    <button 
-                        onClick={handleAdminLogin}
-                        className="w-full bg-orange-600 text-white py-2 rounded-lg font-bold hover:bg-orange-700 transition"
-                    >
-                        Login
-                    </button>
-                </div>
-            </div>
-        </div>
-      )}
-
-      {/* Admin Config Modal */}
-      {showConfig && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in">
-            <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
-                <div className="flex justify-between items-center mb-4">
-                    <h3 className="font-bold text-lg flex items-center gap-2 text-gray-800">
-                        <Settings size={20} className="text-orange-600"/> Edit Configuration
-                    </h3>
-                    <button onClick={() => setShowConfig(false)} className="text-gray-400 hover:text-gray-600">
-                        <X size={24}/>
-                    </button>
-                </div>
-                
-                <div className="space-y-6">
-                    <div className="bg-blue-50 p-3 rounded-lg border border-blue-100">
-                        <p className="text-xs text-blue-800">
-                            <strong>Note:</strong> ค่าที่ตั้งที่นี่จะบันทึกใน <strong>เครื่องนี้เท่านั้น</strong> (LocalStorage) เหมาะสำหรับเจ้าของร้านที่ต้องการทดสอบหรือแก้ไขด่วน
-                        </p>
-                    </div>
-
-                    {/* API Key Editor (NEW) */}
-                    <div className="space-y-2 border-b border-gray-100 pb-4">
-                        <div className="flex justify-between items-end">
-                             <label className="block text-sm font-bold text-gray-700 flex items-center gap-1">
-                                <KeyRound size={14} className="text-orange-500"/> Gemini API Key
-                             </label>
-                             <span className={`text-[10px] px-2 py-0.5 rounded-full ${apiKeySource.includes('Local') ? 'bg-orange-100 text-orange-600' : apiKeySource.includes('System') ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
-                                 Status: {apiKeySource}
-                             </span>
-                        </div>
-                        <input 
-                            type="password"
-                            value={editApiKey}
-                            onChange={(e) => setEditApiKey(e.target.value)}
-                            placeholder="AIzaSy..."
-                            className="w-full p-2 border border-gray-300 rounded-lg text-sm font-mono"
-                        />
-                         <p className="text-xs text-gray-500">
-                           *ใส่ Key ที่นี่เพื่อใช้งาน AI บนเครื่องนี้ (ไม่ต้องแก้โค้ด/Redeploy)
-                        </p>
-                    </div>
-
-                    {/* Logo Editor */}
-                    <div className="space-y-2">
-                        <div className="flex justify-between items-end">
-                             <label className="block text-sm font-bold text-gray-700">Logo URL</label>
-                             <span className={`text-[10px] px-2 py-0.5 rounded-full ${logoSource.includes('Local') ? 'bg-orange-100 text-orange-600' : logoSource.includes('Sheet') ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-500'}`}>
-                                 Source: {logoSource}
-                             </span>
-                        </div>
-                        <input 
-                            type="text"
-                            value={editLogoUrl}
-                            onChange={(e) => setEditLogoUrl(e.target.value)}
-                            className="w-full p-2 border border-gray-300 rounded-lg text-sm mb-2"
-                        />
-                        <div className="h-16 w-full bg-gray-100 rounded-lg flex items-center justify-center border border-gray-200 overflow-hidden">
-                            <img src={editLogoUrl} alt="Preview" className="h-full object-contain"/>
-                        </div>
-                    </div>
-
-                    {/* QR Code Editor */}
-                    <div className="space-y-2">
-                        <div className="flex justify-between items-end">
-                             <label className="block text-sm font-bold text-gray-700">QR Code URL</label>
-                             <span className={`text-[10px] px-2 py-0.5 rounded-full ${qrSource.includes('Local') ? 'bg-orange-100 text-orange-600' : qrSource.includes('Sheet') ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-500'}`}>
-                                 Source: {qrSource}
-                             </span>
-                        </div>
-                        <input 
-                            type="text"
-                            value={editQrUrl}
-                            onChange={(e) => setEditQrUrl(e.target.value)}
-                            className="w-full p-2 border border-gray-300 rounded-lg text-sm mb-2"
-                        />
-                        <div className="w-32 h-32 mx-auto bg-gray-100 rounded-lg flex items-center justify-center border border-gray-200 overflow-hidden">
-                            <img src={editQrUrl} alt="Preview" className="h-full object-contain"/>
-                        </div>
-                    </div>
-
-                    {/* Line OA ID Editor */}
-                    <div className="space-y-2">
-                        <div className="flex justify-between items-end">
-                             <label className="block text-sm font-bold text-gray-700">Line OA ID (e.g. @seoulgood)</label>
-                             <span className={`text-[10px] px-2 py-0.5 rounded-full ${lineSource.includes('Local') ? 'bg-orange-100 text-orange-600' : lineSource.includes('Sheet') ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-500'}`}>
-                                 Source: {lineSource}
-                             </span>
-                        </div>
-                        <input 
-                            type="text"
-                            value={editLineId}
-                            onChange={(e) => setEditLineId(e.target.value)}
-                            placeholder="@yourlineid"
-                            className="w-full p-2 border border-gray-300 rounded-lg text-sm mb-2"
-                        />
-                        <p className="text-xs text-gray-500">
-                           *ถ้าใส่ Line ID ระบบจะเพิ่มปุ่ม "แชทกับร้าน" และใช้สำหรับการส่งออเดอร์
-                        </p>
-                    </div>
-
-                    <div className="flex gap-2 pt-2">
-                        <button 
-                            onClick={handleResetConfig}
-                            className="flex-1 bg-gray-100 text-gray-700 py-2 rounded-lg font-bold hover:bg-gray-200 transition text-sm"
-                        >
-                            Reset (Use Sheet)
-                        </button>
-                        <button 
-                            onClick={handleSaveConfig}
-                            className="flex-1 bg-green-600 text-white py-2 rounded-lg font-bold hover:bg-green-700 transition flex items-center justify-center gap-2"
-                        >
-                            <Save size={18}/> Save (Local)
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-      )}
-
-      {/* AI Assistant Panel */}
-      {showAi && (
-        <div className="bg-orange-50 p-4 border-b border-orange-200 animate-in slide-in-from-top duration-300">
-            <h3 className="font-bold text-orange-800 mb-2 flex items-center gap-2 text-sm">
-                <Info size={16}/> ผู้ช่วยแนะนำอาหาร (AI Waiter)
-            </h3>
-            <div className="flex gap-2 mb-3">
-                <input 
-                    type="text" 
-                    value={aiQuery}
-                    onChange={(e) => setAiQuery(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleAiAsk()}
-                    placeholder="เช่น อยากทานของเผ็ดๆ..."
-                    className="flex-1 p-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
-                />
-                <button 
-                    onClick={handleAiAsk}
-                    disabled={isAiLoading}
-                    className="bg-orange-500 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-orange-600 disabled:opacity-50"
-                >
-                    {isAiLoading ? <Loader2 className="animate-spin w-4 h-4"/> : 'ถาม'}
-                </button>
-            </div>
-            {aiResponse && (
-                <div className="bg-white p-3 rounded-lg text-sm text-gray-700 shadow-sm border border-orange-100 whitespace-pre-wrap">
-                    {aiResponse}
-                </div>
-            )}
-            {finalLineId && (
-                <div className="mt-2 text-right">
-                    <a 
-                        href={`https://line.me/R/ti/p/${finalLineId}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-xs text-orange-600 underline flex items-center justify-end gap-1 hover:text-orange-800"
-                    >
-                        <MessageSquare size={12} /> ติดต่อพนักงาน (Human Support)
-                    </a>
-                </div>
-            )}
-        </div>
-      )}
 
       {/* Category Tabs */}
       <div className="sticky top-[70px] z-30 bg-white border-b border-gray-100 shadow-sm">
@@ -1230,26 +935,31 @@ const App: React.FC = () => {
                                 <div className="w-16 h-16 bg-white rounded border border-gray-200 overflow-hidden shrink-0">
                                     <img src={slipPreview || ''} className="w-full h-full object-cover" />
                                 </div>
-                                <button 
-                                    onClick={handleCopySlip}
-                                    className={`flex-1 rounded-lg font-bold text-sm transition flex flex-col items-center justify-center gap-1 border ${
-                                        copyStatus === 'success' 
-                                        ? 'bg-green-100 text-green-700 border-green-200' 
-                                        : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50 shadow-sm'
-                                    }`}
-                                >
-                                    {copyStatus === 'success' ? (
-                                        <>
-                                            <Check size={20} className="text-green-600"/>
-                                            <span>คัดลอกแล้ว!</span>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Copy size={18} className="text-gray-500"/>
-                                            <span>กดเพื่อคัดลอกรูป</span>
-                                        </>
-                                    )}
-                                </button>
+                                <div className="flex-1 flex flex-col gap-1">
+                                    <button 
+                                        onClick={handleCopySlip}
+                                        className={`w-full flex-1 rounded-lg font-bold text-sm transition flex flex-col items-center justify-center gap-1 border ${
+                                            copyStatus === 'success' 
+                                            ? 'bg-green-100 text-green-700 border-green-200' 
+                                            : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50 shadow-sm'
+                                        }`}
+                                    >
+                                        {copyStatus === 'success' ? (
+                                            <>
+                                                <Check size={20} className="text-green-600"/>
+                                                <span>คัดลอกแล้ว!</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Copy size={18} className="text-gray-500"/>
+                                                <span>กดปุ่มเพื่อคัดลอก</span>
+                                            </>
+                                        )}
+                                    </button>
+                                    <span className="text-[10px] text-gray-400 text-center px-1">
+                                        (หากปุ่มกดไม่ติด ให้กดค้างที่รูปเพื่อคัดลอก)
+                                    </span>
+                                </div>
                             </div>
                         </div>
 
