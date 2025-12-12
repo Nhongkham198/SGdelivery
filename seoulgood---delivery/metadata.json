@@ -1,0 +1,7 @@
+{
+  "name": "SeoulGood - Delivery",
+  "description": "A food delivery application using Google Sheets as a database, OpenStreetMap for location, and Gemini AI for menu recommendations.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
