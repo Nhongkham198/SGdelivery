@@ -389,75 +389,79 @@ const App: React.FC = () => {
   const showStickyCart = cart.length > 0 && !isCartOpen && !selectedItem;
 
   return (
-    <div className="min-h-screen pb-32 relative max-w-5xl mx-auto bg-gray-50 shadow-xl overflow-hidden">
+    <div className="min-h-screen pb-32 relative max-w-5xl mx-auto bg-gray-50 shadow-xl">
       
-      {/* Header */}
-      <header className="sticky top-0 z-40 bg-white shadow-sm px-4 py-2 flex items-center gap-2">
-        <div className="flex items-center gap-3 mr-auto">
-            {/* Logo Image */}
-            <div className="h-16 w-auto flex items-center justify-center shadow-sm hover:scale-105 transition-transform">
-                <img 
-                    src={finalLogoUrl} 
-                    alt="SeoulGood Logo" 
-                    className="h-full w-auto object-contain drop-shadow-md"
-                />
-            </div>
-            <div>
-                 <h1 className="text-xl font-bold text-gray-800 leading-none tracking-tight">SeoulGood</h1>
-                 <p className="text-xs text-orange-600 font-medium mt-0.5">ต้นตำหรับอาหารเกาหลี</p>
-            </div>
-        </div>
-
-        {/* NEW: Delivery Notice Badge */}
-        <div className="flex justify-end items-center">
-            <div className="bg-orange-50 border border-orange-100 rounded-lg px-3 py-1.5 flex items-center gap-2 shadow-sm">
-                <div className="bg-orange-500 rounded-full p-1 shrink-0 flex items-center justify-center shadow-sm">
-                    {/* Scooter/Motorcycle Icon */}
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white" className="w-3 h-3">
-                         <path d="M19.5 6.5h-3c-1.1 0-2 .9-2 2v2.5h-3v-1c0-.55-.45-1-1-1s-1 .45-1 1v1H8v-1c0-.55-.45-1-1-1s-1 .45-1 1v2.35c-2.3.65-4 2.75-4 5.15 0 2.95 2.6 5.35 5.75 5.5h6.5c3.15-.15 5.75-2.55 5.75-5.5 0-2.4-1.7-4.5-4-5.15V8.5c0-.55-.45-1-1-1zm-11 9.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm10 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/>
-                    </svg>
+      {/* Sticky Header Group: Logo + Delivery Badge + Categories */}
+      <div className="sticky top-0 z-50 bg-white shadow-md">
+        
+        {/* Top Header */}
+        <header className="px-4 py-2 flex items-center gap-2">
+            <div className="flex items-center gap-3 mr-auto">
+                {/* Logo Image */}
+                <div className="h-16 w-auto flex items-center justify-center shadow-sm hover:scale-105 transition-transform">
+                    <img 
+                        src={finalLogoUrl} 
+                        alt="SeoulGood Logo" 
+                        className="h-full w-auto object-contain drop-shadow-md"
+                    />
                 </div>
-                <span className="text-[10px] sm:text-xs font-bold text-orange-700 leading-tight hidden sm:inline">
-                    ระบบนี้ใช้เฉพาะการส่ง Delivery เท่านั้น
-                </span>
-                <span className="text-[10px] font-bold text-orange-700 leading-tight sm:hidden">
-                    Delivery Only
-                </span>
+                <div>
+                     <h1 className="text-xl font-bold text-gray-800 leading-none tracking-tight">SeoulGood</h1>
+                     <p className="text-xs text-orange-600 font-medium mt-0.5">ต้นตำหรับอาหารเกาหลี</p>
+                </div>
             </div>
-        </div>
 
-        <div className="flex gap-2 shrink-0">
-            {/* LINE Contact Button - Only if ID is set */}
-            {finalLineId && (
-                <a 
-                    href={`https://line.me/R/ti/p/${finalLineId}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="p-2 rounded-full bg-[#06C755] text-white hover:bg-[#05b64d] transition flex items-center justify-center shadow-sm"
-                    title="Chat with Store"
-                >
-                    <MessageSquare size={22} />
-                </a>
-            )}
-        </div>
-      </header>
+            {/* Delivery Notice Badge */}
+            <div className="flex justify-end items-center">
+                <div className="bg-orange-50 border border-orange-100 rounded-lg px-3 py-1.5 flex items-center gap-2 shadow-sm">
+                    <div className="bg-orange-500 rounded-full p-1 shrink-0 flex items-center justify-center shadow-sm">
+                        {/* Scooter/Motorcycle Icon */}
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white" className="w-3 h-3">
+                             <path d="M19.5 6.5h-3c-1.1 0-2 .9-2 2v2.5h-3v-1c0-.55-.45-1-1-1s-1 .45-1 1v1H8v-1c0-.55-.45-1-1-1s-1 .45-1 1v2.35c-2.3.65-4 2.75-4 5.15 0 2.95 2.6 5.35 5.75 5.5h6.5c3.15-.15 5.75-2.55 5.75-5.5 0-2.4-1.7-4.5-4-5.15V8.5c0-.55-.45-1-1-1zm-11 9.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm10 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/>
+                        </svg>
+                    </div>
+                    <span className="text-[10px] sm:text-xs font-bold text-orange-700 leading-tight hidden sm:inline">
+                        ระบบนี้ใช้เฉพาะการส่ง Delivery เท่านั้น
+                    </span>
+                    <span className="text-[10px] font-bold text-orange-700 leading-tight sm:hidden">
+                        Delivery Only
+                    </span>
+                </div>
+            </div>
 
-      {/* Category Tabs */}
-      <div className="sticky top-[70px] z-30 bg-white border-b border-gray-100 shadow-sm">
-        <div className="flex overflow-x-auto no-scrollbar py-3 px-4 gap-3">
-            {categories.map(cat => (
-                <button
-                    key={cat}
-                    onClick={() => setSelectedCategory(cat)}
-                    className={`whitespace-nowrap px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
-                        selectedCategory === cat 
-                        ? 'bg-orange-600 text-white shadow-md' 
-                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                    }`}
-                >
-                    {cat}
-                </button>
-            ))}
+            <div className="flex gap-2 shrink-0">
+                {/* LINE Contact Button - Only if ID is set */}
+                {finalLineId && (
+                    <a 
+                        href={`https://line.me/R/ti/p/${finalLineId}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="p-2 rounded-full bg-[#06C755] text-white hover:bg-[#05b64d] transition flex items-center justify-center shadow-sm"
+                        title="Chat with Store"
+                    >
+                        <MessageSquare size={22} />
+                    </a>
+                )}
+            </div>
+        </header>
+
+        {/* Category Tabs (Now inside sticky container) */}
+        <div className="border-b border-gray-100">
+            <div className="flex overflow-x-auto no-scrollbar py-3 px-4 gap-3">
+                {categories.map(cat => (
+                    <button
+                        key={cat}
+                        onClick={() => setSelectedCategory(cat)}
+                        className={`whitespace-nowrap px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
+                            selectedCategory === cat 
+                            ? 'bg-orange-600 text-white shadow-md' 
+                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        }`}
+                    >
+                        {cat}
+                    </button>
+                ))}
+            </div>
         </div>
       </div>
 
