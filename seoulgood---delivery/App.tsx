@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { ShoppingCart, MapPin, Send, MessageCircle, MessageSquare, X, Plus, Minus, Search, Loader2, Info, ChevronRight, Store, RotateCcw, ChevronDown, QrCode, Settings, Lock, Save, Upload, Image as ImageIcon, Trash2, KeyRound, ThumbsUp } from 'lucide-react';
+import { ShoppingCart, MapPin, Send, MessageCircle, MessageSquare, X, Plus, Minus, Search, Loader2, Info, ChevronRight, Store, RotateCcw, ChevronDown, QrCode, Settings, Lock, Save, Upload, Image as ImageIcon, Trash2, KeyRound, ThumbsUp, Copy, Check } from 'lucide-react';
 import { MenuItem, CartItem, LocationState } from './types';
 import { fetchMenuFromSheet } from './services/menuService';
 import { getFoodRecommendation } from './services/geminiService';
@@ -140,6 +140,8 @@ const App: React.FC = () => {
   const [showLogin, setShowLogin] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false); // NEW STATE for Custom Modal
+  const [copyStatus, setCopyStatus] = useState<'idle' | 'success' | 'error'>('idle'); // State for Copy Feedback
+  
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [editLogoUrl, setEditLogoUrl] = useState('');
@@ -176,6 +178,11 @@ const App: React.FC = () => {
     };
     loadData();
   }, []);
+
+  // Reset copy status when modal opens
+  useEffect(() => {
+      if (showConfirmModal) setCopyStatus('idle');
+  }, [showConfirmModal]);
 
   // Admin Handlers
   const handleAdminLogin = () => {
@@ -410,7 +417,7 @@ const App: React.FC = () => {
       msg += `\n   ${item.price * item.quantity}฿\n`;
     });
     msg += `\n💰 *Total: ${total} THB*`;
-    msg += `\n🧾 Payment Slip: (Paste image here)`;
+    msg += `\n🧾 Payment Slip: (กรุณากดวางรูปสลิปที่นี่ / Paste Slip Here)`;
     
     return encodeURIComponent(msg);
   };
@@ -426,35 +433,38 @@ const App: React.FC = () => {
         return;
     }
 
-    // Instead of window.confirm which can be blocked or cause UI issues, 
-    // we show a custom modal to handle the redirection reliably.
+    // Show custom modal
     setShowConfirmModal(true);
   };
 
-  const handleFinalLineRedirect = async () => {
-        // 1. Try to copy the slip image to clipboard first
-        if (slipPreview) {
-            await copyImageToClipboard(slipPreview);
-        }
+  // New function to handle manual copy
+  const handleCopySlip = async () => {
+      if (!slipPreview) return;
+      
+      const success = await copyImageToClipboard(slipPreview);
+      if (success) {
+          setCopyStatus('success');
+      } else {
+          setCopyStatus('error');
+          alert("ขออภัย! ระบบไม่สามารถคัดลอกรูปได้อัตโนมัติ \n\nกรุณาบันทึกรูปสลิปและกดส่งเองใน LINE");
+      }
+  };
 
-        // 2. Prepare message
+  const handleOpenLine = async () => {
+        // 1. Prepare message
         const message = generateLineMessage();
         let targetUrl = '';
 
         if (finalLineId && finalLineId !== '') {
-            // Use oaMessage scheme for Official Accounts (ensure ID is trimmed and cleaned)
-            // This format works for both iOS/Android if App is installed
             targetUrl = `https://line.me/R/oaMessage/${finalLineId}/?${message}`;
         } else {
-            // Fallback to text scheme (opens picker)
             targetUrl = `https://line.me/R/msg/text/?${message}`;
         }
         
-        // 3. Redirect
-        // Use window.location.href instead of window.open for better mobile deep-linking support
+        // 2. Redirect
         window.location.href = targetUrl;
         
-        // Optionally close modal after a moment
+        // Close modal
         setTimeout(() => setShowConfirmModal(false), 2000);
   };
 
@@ -1193,43 +1203,78 @@ const App: React.FC = () => {
                 </div>
             )}
 
-            {/* Line Confirmation Modal */}
+            {/* Line Confirmation Modal - IMPROVED UX */}
             {showConfirmModal && (
                 <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
-                    <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl text-center">
-                        <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                            <Send size={32} className="text-green-600" />
-                        </div>
-                        <h3 className="font-bold text-xl text-gray-800 mb-2">พร้อมส่งออเดอร์ทาง LINE</h3>
-                        <div className="text-left bg-orange-50 p-4 rounded-xl border border-orange-100 mb-6 text-sm space-y-2">
-                            <p className="flex items-start gap-2">
-                                <span className="text-orange-500 font-bold">1.</span>
-                                <span>ระบบจะเปิดแอป LINE ขึ้นมา</span>
-                            </p>
-                            <p className="flex items-start gap-2">
-                                <span className="text-orange-500 font-bold">2.</span>
-                                <span>ข้อความรายการอาหารจะถูกพิมพ์ให้อัตโนมัติ <strong className="text-green-600">ให้กดปุ่มส่ง (Send)</strong></span>
-                            </p>
-                            <p className="flex items-start gap-2">
-                                <span className="text-red-500 font-bold">3.</span>
-                                <span className="font-bold text-red-600">สำคัญ! ระบบก๊อปปี้รูปสลิปให้แล้ว กด "วาง" (Paste) ในแชทได้เลย</span>
-                            </p>
+                    <div className="bg-white rounded-2xl w-full max-w-sm p-5 shadow-2xl relative">
+                        <button 
+                            onClick={() => setShowConfirmModal(false)}
+                            className="absolute top-2 right-2 text-gray-400 hover:text-gray-600 p-2"
+                        >
+                            <X size={20} />
+                        </button>
+
+                        <div className="text-center mb-4">
+                            <h3 className="font-bold text-xl text-gray-800">ขั้นตอนการส่ง (Steps)</h3>
+                            <p className="text-xs text-gray-500">กรุณาทำตาม 2 ขั้นตอนง่ายๆ ด้านล่าง</p>
                         </div>
                         
-                        <div className="flex gap-3">
-                            <button 
-                                onClick={() => setShowConfirmModal(false)}
-                                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 py-3 rounded-xl font-bold transition"
-                            >
-                                ยกเลิก
-                            </button>
-                            <button 
-                                onClick={handleFinalLineRedirect}
-                                className="flex-[2] bg-[#06C755] hover:bg-[#05b64d] text-white py-3 rounded-xl font-bold shadow-lg active:scale-95 transition flex items-center justify-center gap-2"
-                            >
-                                <Send size={20} /> เปิด LINE เลย
-                            </button>
+                        {/* Step 1: Copy Slip */}
+                        <div className="bg-gray-50 p-3 rounded-lg border border-gray-100 mb-3">
+                            <div className="flex items-center gap-2 mb-2">
+                                <div className="bg-orange-100 text-orange-600 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold">1</div>
+                                <span className="font-bold text-gray-700 text-sm">คัดลอกรูปสลิป (Copy Slip)</span>
+                            </div>
+                            
+                            <div className="flex gap-3">
+                                <div className="w-16 h-16 bg-white rounded border border-gray-200 overflow-hidden shrink-0">
+                                    <img src={slipPreview || ''} className="w-full h-full object-cover" />
+                                </div>
+                                <button 
+                                    onClick={handleCopySlip}
+                                    className={`flex-1 rounded-lg font-bold text-sm transition flex flex-col items-center justify-center gap-1 border ${
+                                        copyStatus === 'success' 
+                                        ? 'bg-green-100 text-green-700 border-green-200' 
+                                        : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50 shadow-sm'
+                                    }`}
+                                >
+                                    {copyStatus === 'success' ? (
+                                        <>
+                                            <Check size={20} className="text-green-600"/>
+                                            <span>คัดลอกแล้ว!</span>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Copy size={18} className="text-gray-500"/>
+                                            <span>กดเพื่อคัดลอกรูป</span>
+                                        </>
+                                    )}
+                                </button>
+                            </div>
                         </div>
+
+                        {/* Step 2: Open LINE */}
+                        <div className="bg-gray-50 p-3 rounded-lg border border-gray-100 mb-4">
+                             <div className="flex items-center gap-2 mb-2">
+                                <div className="bg-green-100 text-green-600 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold">2</div>
+                                <span className="font-bold text-gray-700 text-sm">ส่งเข้า LINE (Send)</span>
+                            </div>
+                            <p className="text-xs text-gray-500 ml-8 mb-2">
+                                กดปุ่มเปิด LINE แล้วกด <strong className="text-black">วาง (Paste)</strong> รูปในช่องแชท
+                            </p>
+                        </div>
+
+                        {/* NEW MESSAGE */}
+                        <div className="mb-4 text-xs text-center text-gray-600 bg-orange-50 p-2 rounded border border-orange-100">
+                            หลังจากระบบตรวจสอบสลิปการโอน แล้วพนักงานยืนยันการรับยอดโอนของลูกค้า อาหารของท่านรอ 15-20 นาที ทั้งนี้ขึ้นอยู่กับระยะและคิวของลูกค้าท่านอื่นๆ
+                        </div>
+
+                        <button 
+                            onClick={handleOpenLine}
+                            className="w-full bg-[#06C755] hover:bg-[#05b64d] text-white py-3 rounded-xl font-bold shadow-lg active:scale-95 transition flex items-center justify-center gap-2 text-lg"
+                        >
+                            <Send size={20} /> เปิด LINE ส่งออเดอร์
+                        </button>
                     </div>
                 </div>
             )}
