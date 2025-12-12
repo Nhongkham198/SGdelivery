@@ -1,7 +1,8 @@
+
 import React, { useEffect, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMapEvents, useMap } from 'react-leaflet';
 import L from 'leaflet';
-import { Search, Store } from 'lucide-react';
+import { Search, Store, Crosshair } from 'lucide-react';
 import { LocationState } from '../types';
 
 // --- FIX: Use CDN URLs instead of importing images directly ---
@@ -34,13 +35,23 @@ const STORE_LNG = 103.502028;
 const STORE_LOCATION: [number, number] = [STORE_LAT, STORE_LNG];
 
 // Component to handle map movement programmatically
-const MapController = ({ center }: { center: L.LatLngExpression | null }) => {
+const MapController = ({ center, locateTrigger }: { center: L.LatLngExpression | null, locateTrigger: number }) => {
   const map = useMap();
+  
+  // Handle Search Center
   useEffect(() => {
     if (center) {
       map.flyTo(center, 16);
     }
   }, [center, map]);
+
+  // Handle GPS Locate Trigger
+  useEffect(() => {
+    if (locateTrigger > 0) {
+      map.locate({ setView: true, maxZoom: 16 });
+    }
+  }, [locateTrigger, map]);
+
   return null;
 };
 
@@ -52,7 +63,7 @@ const LocationMarker: React.FC<{ onSelect: (lat: number, lng: number) => void, p
     },
     locationfound(e) {
       onSelect(e.latlng.lat, e.latlng.lng);
-      map.flyTo(e.latlng, 15);
+      map.flyTo(e.latlng, 16);
     },
   });
 
@@ -79,6 +90,7 @@ export const MapPicker: React.FC<MapPickerProps> = ({ onLocationSelect, initialL
   const [searchText, setSearchText] = useState('');
   const [mapCenter, setMapCenter] = useState<L.LatLngExpression | null>(null);
   const [isSearching, setIsSearching] = useState(false);
+  const [locateTrigger, setLocateTrigger] = useState(0); // Counter to trigger location
 
   const handleSelect = (lat: number, lng: number) => {
     const newPos = new L.LatLng(lat, lng);
@@ -108,6 +120,10 @@ export const MapPicker: React.FC<MapPickerProps> = ({ onLocationSelect, initialL
     }
   };
 
+  const handleLocateMe = () => {
+      setLocateTrigger(prev => prev + 1);
+  };
+
   return (
     <div className="h-full w-full rounded-lg overflow-hidden border-2 border-orange-200 shadow-inner z-0 relative flex flex-col bg-gray-100">
       
@@ -133,6 +149,15 @@ export const MapPicker: React.FC<MapPickerProps> = ({ onLocationSelect, initialL
          </button>
       </div>
 
+      {/* Locate Me Button */}
+      <button
+          onClick={handleLocateMe}
+          className="absolute bottom-8 right-2 z-[500] bg-white p-2 rounded-full shadow-md border border-gray-300 text-gray-700 hover:text-blue-600 hover:border-blue-500 active:scale-95 transition"
+          title="ตำแหน่งปัจจุบัน (Current Location)"
+      >
+          <Crosshair size={24} />
+      </button>
+
       <MapContainer 
         center={STORE_LOCATION} // Default center to store
         zoom={13} 
@@ -145,7 +170,7 @@ export const MapPicker: React.FC<MapPickerProps> = ({ onLocationSelect, initialL
         />
         
         {/* Controllers */}
-        <MapController center={mapCenter} />
+        <MapController center={mapCenter} locateTrigger={locateTrigger} />
         
         {/* User Selection Marker */}
         <LocationMarker onSelect={handleSelect} position={position} />
@@ -165,7 +190,7 @@ export const MapPicker: React.FC<MapPickerProps> = ({ onLocationSelect, initialL
       </MapContainer>
       
       <div className="absolute bottom-0 left-0 right-0 bg-white/90 text-[10px] text-center text-gray-500 py-1 z-[400] border-t border-gray-200">
-        *แตะที่แผนที่เพื่อปักหมุดจุดส่งอาหาร
+        *แตะที่แผนที่ หรือกดปุ่มเป้าหมาย เพื่อปักหมุดจุดส่งอาหาร
       </div>
     </div>
   );

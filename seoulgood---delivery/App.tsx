@@ -1,7 +1,9 @@
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { ShoppingCart, MapPin, Send, MessageSquare, X, Plus, Minus, Search, Loader2, ChevronRight, Store, RotateCcw, ChevronDown, QrCode, Upload, Image as ImageIcon, Trash2, ThumbsUp, Copy, Check } from 'lucide-react';
 import { MenuItem, CartItem, LocationState } from './types';
 import { fetchMenuFromSheet } from './services/menuService';
+import { saveOrderToSheet } from './services/orderService'; // Import Service ใหม่
 import { MapPicker } from './components/MapPicker';
 
 // --- Assets ---
@@ -150,6 +152,11 @@ const App: React.FC = () => {
   
   const [showConfirmModal, setShowConfirmModal] = useState(false); // Custom Modal
   const [copyStatus, setCopyStatus] = useState<'idle' | 'success' | 'error'>('idle'); // State for Copy Feedback
+  
+  // New States for Order Process
+  const [isSavingOrder, setIsSavingOrder] = useState(false);
+  const [currentOrderId, setCurrentOrderId] = useState<string>('');
+  
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -302,7 +309,8 @@ const App: React.FC = () => {
   const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
 
   const generateLineMessage = () => {
-    let msg = `🛒 *New Order from SeoulGood*\n\n`;
+    // Add Order ID to the header
+    let msg = `🛒 *New Order from SeoulGood* ${currentOrderId}\n\n`;
     msg += `👤 Customer: ${customerName}\n`;
     msg += `📞 Tel: ${customerPhone}\n`;
     msg += `📍 Location: ${location ? `https://www.google.com/maps?q=${location.lat},${location.lng}` : 'Not provided'}\n\n`;
@@ -322,12 +330,12 @@ const App: React.FC = () => {
       msg += `\n   ${item.price * item.quantity}฿\n`;
     });
     msg += `\n💰 *Total: ${total} THB*`;
-    msg += `\n🧾 Payment Slip: (กรุณากดวางรูปสลิปที่นี่ / Paste Slip Here)`;
+    msg += `\n🧾 Payment Slip: (Attached in Chat)`;
     
     return encodeURIComponent(msg);
   };
 
-  const sendToLine = () => {
+  const sendToLine = async () => {
     if (!customerName || !customerPhone || cart.length === 0) {
       alert("กรุณากรอกชื่อ เบอร์โทร และเลือกรายการอาหาร");
       return;
@@ -337,9 +345,36 @@ const App: React.FC = () => {
         alert("กรุณาแนบสลิปการโอนเงินก่อนยืนยันออเดอร์");
         return;
     }
-
-    // Show custom modal
-    setShowConfirmModal(true);
+    
+    // START SAVING PROCESS
+    setIsSavingOrder(true);
+    
+    try {
+        // Save to Google Sheet
+        const result = await saveOrderToSheet({
+            customerName,
+            customerPhone,
+            items: cart,
+            total: total,
+            location: location
+        });
+        
+        if (result.result === 'success' && result.orderNo) {
+            setCurrentOrderId(result.orderNo);
+        } else {
+            // Fallback if API fails, still allow order but warn
+            console.warn("Could not save to sheet, proceeding with Line only");
+            setCurrentOrderId('(Offline)');
+        }
+        
+        // Show confirm modal AFTER saving
+        setShowConfirmModal(true);
+        
+    } catch (e) {
+        alert("เกิดข้อผิดพลาดในการบันทึกออเดอร์");
+    } finally {
+        setIsSavingOrder(false);
+    }
   };
 
   // New function to handle manual copy
@@ -904,9 +939,20 @@ const App: React.FC = () => {
                         </div>
                         <button 
                             onClick={sendToLine}
-                            className="w-full bg-[#06C755] hover:bg-[#05b64d] active:scale-[0.98] text-white py-4 rounded-xl font-bold text-xl shadow-lg hover:shadow-xl transition flex items-center justify-center gap-2"
+                            disabled={isSavingOrder}
+                            className={`w-full text-white py-4 rounded-xl font-bold text-xl shadow-lg transition flex items-center justify-center gap-2 ${
+                                isSavingOrder ? 'bg-gray-400 cursor-not-allowed' : 'bg-[#06C755] hover:bg-[#05b64d] active:scale-[0.98]'
+                            }`}
                         >
-                            <Send size={24} /> ยืนยันการสั่งทาง LINE
+                            {isSavingOrder ? (
+                                <>
+                                    <Loader2 className="animate-spin" /> กำลังบันทึกออเดอร์...
+                                </>
+                            ) : (
+                                <>
+                                    <Send size={24} /> ยืนยันการสั่งทาง LINE
+                                </>
+                            )}
                         </button>
                     </div>
                 </div>
@@ -928,6 +974,15 @@ const App: React.FC = () => {
                             <p className="text-xs text-gray-500">กรุณาทำตาม 2 ขั้นตอนง่ายๆ ด้านล่าง</p>
                         </div>
                         
+                        {/* Order ID Confirmation */}
+                        {currentOrderId && currentOrderId !== '(Offline)' && (
+                            <div className="mb-3 text-center">
+                                <span className="bg-orange-100 text-orange-700 px-3 py-1 rounded-full text-sm font-bold border border-orange-200">
+                                    Order ID: {currentOrderId}
+                                </span>
+                            </div>
+                        )}
+
                         {/* Step 1: Copy Slip */}
                         <div className="bg-gray-50 p-3 rounded-lg border border-gray-100 mb-3">
                             <div className="flex items-center gap-2 mb-2">
