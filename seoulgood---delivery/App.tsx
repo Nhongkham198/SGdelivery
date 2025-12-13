@@ -308,9 +308,10 @@ const App: React.FC = () => {
   const total = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
   const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
 
-  const generateLineMessage = () => {
-    // Add Order ID to the header
-    let msg = `🛒 *New Order from SeoulGood* ${currentOrderId}\n\n`;
+  const generateLineMessage = (orderIdOverride?: string) => {
+    // Add Order ID to the header (Use override if provided, else fallback to state)
+    const displayOrderId = orderIdOverride || currentOrderId;
+    let msg = `🛒 *New Order from SeoulGood* ${displayOrderId}\n\n`;
     msg += `👤 Customer: ${customerName}\n`;
     msg += `📞 Tel: ${customerPhone}\n`;
     msg += `📍 Location: ${location ? `https://www.google.com/maps?q=${location.lat},${location.lng}` : 'Not provided'}\n\n`;
@@ -346,35 +347,8 @@ const App: React.FC = () => {
         return;
     }
     
-    // START SAVING PROCESS
-    setIsSavingOrder(true);
-    
-    try {
-        // Save to Google Sheet
-        const result = await saveOrderToSheet({
-            customerName,
-            customerPhone,
-            items: cart,
-            total: total,
-            location: location
-        });
-        
-        if (result.result === 'success' && result.orderNo) {
-            setCurrentOrderId(result.orderNo);
-        } else {
-            // Fallback if API fails, still allow order but warn
-            console.warn("Could not save to sheet, proceeding with Line only");
-            setCurrentOrderId('(Offline)');
-        }
-        
-        // Show confirm modal AFTER saving
-        setShowConfirmModal(true);
-        
-    } catch (e) {
-        alert("เกิดข้อผิดพลาดในการบันทึกออเดอร์");
-    } finally {
-        setIsSavingOrder(false);
-    }
+    // Show confirm modal WITHOUT saving yet
+    setShowConfirmModal(true);
   };
 
   // New function to handle manual copy
@@ -392,21 +366,48 @@ const App: React.FC = () => {
   };
 
   const handleOpenLine = async () => {
-        // 1. Prepare message
-        const message = generateLineMessage();
-        let targetUrl = '';
+        // START SAVING PROCESS (Now moved here)
+        setIsSavingOrder(true);
 
-        if (finalLineId && finalLineId !== '') {
-            targetUrl = `https://line.me/R/oaMessage/${finalLineId}/?${message}`;
-        } else {
-            targetUrl = `https://line.me/R/msg/text/?${message}`;
+        try {
+            // Save to Google Sheet
+            const result = await saveOrderToSheet({
+                customerName,
+                customerPhone,
+                items: cart,
+                total: total,
+                location: location
+            });
+            
+            let orderId = '(Offline)';
+            if (result.result === 'success' && result.orderNo) {
+                orderId = result.orderNo;
+                setCurrentOrderId(result.orderNo); // Update state
+            } else {
+                 console.warn("Could not save to sheet, proceeding with Line only");
+            }
+
+            // 1. Prepare message using the FRESH order ID
+            const message = generateLineMessage(orderId);
+            let targetUrl = '';
+
+            if (finalLineId && finalLineId !== '') {
+                targetUrl = `https://line.me/R/oaMessage/${finalLineId}/?${message}`;
+            } else {
+                targetUrl = `https://line.me/R/msg/text/?${message}`;
+            }
+            
+            // 2. Redirect
+            window.location.href = targetUrl;
+            
+            // Close modal
+            setTimeout(() => setShowConfirmModal(false), 2000);
+
+        } catch (e) {
+            alert("เกิดข้อผิดพลาดในการบันทึกออเดอร์");
+        } finally {
+            setIsSavingOrder(false);
         }
-        
-        // 2. Redirect
-        window.location.href = targetUrl;
-        
-        // Close modal
-        setTimeout(() => setShowConfirmModal(false), 2000);
   };
 
   if (loading) {
@@ -939,20 +940,9 @@ const App: React.FC = () => {
                         </div>
                         <button 
                             onClick={sendToLine}
-                            disabled={isSavingOrder}
-                            className={`w-full text-white py-4 rounded-xl font-bold text-xl shadow-lg transition flex items-center justify-center gap-2 ${
-                                isSavingOrder ? 'bg-gray-400 cursor-not-allowed' : 'bg-[#06C755] hover:bg-[#05b64d] active:scale-[0.98]'
-                            }`}
+                            className={`w-full text-white py-4 rounded-xl font-bold text-xl shadow-lg transition flex items-center justify-center gap-2 bg-[#06C755] hover:bg-[#05b64d] active:scale-[0.98]`}
                         >
-                            {isSavingOrder ? (
-                                <>
-                                    <Loader2 className="animate-spin" /> กำลังบันทึกออเดอร์...
-                                </>
-                            ) : (
-                                <>
-                                    <Send size={24} /> ยืนยันการสั่งทาง LINE
-                                </>
-                            )}
+                            <Send size={24} /> ยืนยันการสั่งทาง LINE
                         </button>
                     </div>
                 </div>
@@ -974,7 +964,7 @@ const App: React.FC = () => {
                             <p className="text-xs text-gray-500">กรุณาทำตาม 2 ขั้นตอนง่ายๆ ด้านล่าง</p>
                         </div>
                         
-                        {/* Order ID Confirmation */}
+                        {/* Order ID Confirmation - Only show if we already have it (won't show initially in new flow) */}
                         {currentOrderId && currentOrderId !== '(Offline)' && (
                             <div className="mb-3 text-center">
                                 <span className="bg-orange-100 text-orange-700 px-3 py-1 rounded-full text-sm font-bold border border-orange-200">
@@ -1040,9 +1030,20 @@ const App: React.FC = () => {
 
                         <button 
                             onClick={handleOpenLine}
-                            className="w-full bg-[#06C755] hover:bg-[#05b64d] text-white py-3 rounded-xl font-bold shadow-lg active:scale-95 transition flex items-center justify-center gap-2 text-lg"
+                            disabled={isSavingOrder}
+                            className={`w-full text-white py-3 rounded-xl font-bold shadow-lg active:scale-95 transition flex items-center justify-center gap-2 text-lg ${
+                                isSavingOrder ? 'bg-gray-400 cursor-not-allowed' : 'bg-[#06C755] hover:bg-[#05b64d]'
+                            }`}
                         >
-                            <Send size={20} /> เปิด LINE ส่งออเดอร์
+                            {isSavingOrder ? (
+                                <>
+                                    <Loader2 className="animate-spin" /> กำลังส่งออเดอร์...
+                                </>
+                            ) : (
+                                <>
+                                    <Send size={20} /> เปิด LINE ส่งออเดอร์
+                                </>
+                            )}
                         </button>
                     </div>
                 </div>
