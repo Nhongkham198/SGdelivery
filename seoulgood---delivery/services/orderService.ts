@@ -3,7 +3,7 @@ import { CartItem, LocationState } from '../types';
 
 // *** สำคัญ: ให้เปลี่ยน URL นี้เป็น Web App URL ที่คุณได้จากการ Deploy Google Apps Script ***
 // ตัวอย่าง: https://script.google.com/macros/s/AKfycbx.../exec
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz8Ws-ASYFdDPq3KeKJXbD2y0h5ZIfrrDYuIUP9xXu1P3X4UWmY0P2Z1hwa7jpu8QNP/exec'; 
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyFs98QwURo7A-HeGt5P5yiqa6UifbQJg0_hH-m1sIowwnkASq4NlLbZwycUZ72QduH/exec'; 
 
 export interface OrderSubmission {
   customerName: string;
