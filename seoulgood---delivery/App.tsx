@@ -25,6 +25,17 @@ const getSafeStorage = (key: string) => {
   }
 };
 
+// Helper for Safe JSON Storage Access
+const getJsonStorage = <T,>(key: string, defaultValue: T): T => {
+  try {
+    const item = localStorage.getItem(key);
+    if (!item || item === 'undefined' || item === 'null') return defaultValue;
+    return JSON.parse(item);
+  } catch (e) {
+    return defaultValue;
+  }
+};
+
 // Helper: Compress Image
 const compressImage = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -177,9 +188,16 @@ const getShopStatus = (config: AppConfig): ShopStatus => {
 const App: React.FC = () => {
   const [menu, setMenu] = useState<MenuItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [cart, setCart] = useState<CartItem[]>([]);
-  const [isCartOpen, setIsCartOpen] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState<string>('All');
+  
+  // Persistent States
+  const [cart, setCart] = useState<CartItem[]>(() => getJsonStorage('cart_items', []));
+  const [isCartOpen, setIsCartOpen] = useState(() => getJsonStorage('is_cart_open', false));
+  const [selectedCategory, setSelectedCategory] = useState<string>(() => getSafeStorage('selected_category') || 'All');
+  
+  const [customerName, setCustomerName] = useState(() => getSafeStorage('customer_name') || '');
+  const [customerPhone, setCustomerPhone] = useState(() => getSafeStorage('customer_phone') || '');
+  const [location, setLocation] = useState<LocationState | null>(() => getJsonStorage('customer_location', null));
+  const [slipPreview, setSlipPreview] = useState<string | null>(() => getSafeStorage('payment_slip'));
   
   // Configurable Images State
   const [sheetConfig, setSheetConfig] = useState<AppConfig>({});
@@ -218,20 +236,34 @@ const App: React.FC = () => {
   const [tempQuantity, setTempQuantity] = useState(1);
   const [tempNote, setTempNote] = useState('');
   const [tempSelectedOptions, setTempSelectedOptions] = useState<Record<string, string>>({});
-
-  const [customerName, setCustomerName] = useState('');
-  const [customerPhone, setCustomerPhone] = useState('');
-  const [location, setLocation] = useState<LocationState | null>(null);
-  const [slipPreview, setSlipPreview] = useState<string | null>(null);
-  const [isProcessingSlip, setIsProcessingSlip] = useState(false);
   
+  const [isProcessingSlip, setIsProcessingSlip] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false); 
   const [copyStatus, setCopyStatus] = useState<'idle' | 'success' | 'error'>('idle');
-  
   const [isSavingOrder, setIsSavingOrder] = useState(false);
   const [currentOrderId, setCurrentOrderId] = useState<string>('');
   
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // --- PERSISTENCE EFFECTS ---
+  useEffect(() => { localStorage.setItem('cart_items', JSON.stringify(cart)); }, [cart]);
+  useEffect(() => { localStorage.setItem('is_cart_open', JSON.stringify(isCartOpen)); }, [isCartOpen]);
+  useEffect(() => { localStorage.setItem('selected_category', selectedCategory); }, [selectedCategory]);
+  useEffect(() => { localStorage.setItem('customer_name', customerName); }, [customerName]);
+  useEffect(() => { localStorage.setItem('customer_phone', customerPhone); }, [customerPhone]);
+  useEffect(() => { localStorage.setItem('customer_location', JSON.stringify(location)); }, [location]);
+  
+  useEffect(() => {
+    if (slipPreview) {
+        try { 
+            localStorage.setItem('payment_slip', slipPreview); 
+        } catch (e) { 
+            console.warn("Slip image too large for local storage"); 
+        }
+    } else {
+        localStorage.removeItem('payment_slip');
+    }
+  }, [slipPreview]);
 
   useEffect(() => {
     const loadData = async () => {
@@ -271,15 +303,15 @@ const App: React.FC = () => {
       return () => clearInterval(interval);
   }, [printerUrl]);
 
-  const categories = useMemo(() => {
-    const cats = Array.from(new Set(menu.map(item => item.category))).filter(Boolean);
-    return ['All', ...cats];
-  }, [menu]);
-
   const filteredMenu = useMemo(() => {
     if (selectedCategory === 'All') return menu;
     return menu.filter(item => item.category === selectedCategory);
   }, [menu, selectedCategory]);
+
+  const categories = useMemo(() => {
+    const cats = Array.from(new Set(menu.map(item => item.category))).filter(Boolean);
+    return ['All', ...cats];
+  }, [menu]);
 
   const openItemModal = (item: MenuItem) => {
     setSelectedItem(item);
@@ -912,7 +944,7 @@ const App: React.FC = () => {
                                  <div>
                                      <label className="block text-sm font-medium text-gray-700 mb-1">ปักหมุดจุดส่ง</label>
                                      <div className="rounded-lg overflow-hidden border border-gray-200 h-[450px]">
-                                         <MapPicker onLocationSelect={setLocation} />
+                                         <MapPicker onLocationSelect={setLocation} initialLocation={location} />
                                      </div>
                                  </div>
                              </div>
