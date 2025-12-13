@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { ShoppingCart, MapPin, Send, MessageSquare, X, Plus, Minus, Loader2, ChevronDown, QrCode, Upload, Image as ImageIcon, Trash2, ThumbsUp, Copy, Check, Store, RotateCcw, Printer, Settings, Lock } from 'lucide-react';
-import { MenuItem, CartItem, LocationState } from './types';
+import { ShoppingCart, MapPin, Send, MessageSquare, X, Plus, Minus, Loader2, ChevronDown, QrCode, Upload, Image as ImageIcon, Trash2, ThumbsUp, Copy, Check, Store, RotateCcw, Printer, Settings, Lock, Clock } from 'lucide-react';
+import { MenuItem, CartItem, LocationState, AppConfig } from './types';
 import { fetchMenuFromSheet } from './services/menuService';
 import { saveOrderToSheet } from './services/orderService';
 import { checkServerHealth, sendToPrintServer } from './services/printerService';
@@ -107,6 +107,73 @@ const copyImageToClipboard = async (imageSrc: string) => {
     return false;
 };
 
+interface ShopStatus {
+    isOpen: boolean;
+    message: string;
+}
+
+// --- Time Check Logic (Advanced) ---
+const getShopStatus = (config: AppConfig): ShopStatus => {
+    // 0. Master Switch (Manual Close) - Highest Priority
+    if (config.isManualClose) {
+        return { isOpen: false, message: 'ร้านปิดชั่วคราว (Closed)' };
+    }
+
+    const now = new Date();
+    const dayIndex = now.getDay(); // 0 = Sun, 1 = Mon, ...
+    const currentMins = now.getHours() * 60 + now.getMinutes();
+    const dayNames = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัส', 'ศุกร์', 'เสาร์'];
+    
+    // 1. Check Specific Daily Schedule
+    if (config.schedules && config.schedules[dayIndex]) {
+        const schedule = config.schedules[dayIndex];
+        
+        if (schedule.isClosed) {
+            return { isOpen: false, message: `ร้านปิดทุกวัน${dayNames[dayIndex]}` };
+        }
+
+        if (schedule.open && schedule.close) {
+            const [openH, openM] = schedule.open.split(':').map(Number);
+            const [closeH, closeM] = schedule.close.split(':').map(Number);
+            const openMins = openH * 60 + openM;
+            const closeMins = closeH * 60 + closeM;
+
+            let isOpen = false;
+            // Handle overnight
+            if (closeMins < openMins) {
+                isOpen = currentMins >= openMins || currentMins < closeMins;
+            } else {
+                isOpen = currentMins >= openMins && currentMins < closeMins;
+            }
+
+            if (!isOpen) return { isOpen: false, message: `วันนี้เปิด ${schedule.open} - ${schedule.close} น.` };
+            return { isOpen: true, message: `เปิดทำการ (วันนี้ ${schedule.open} - ${schedule.close})` };
+        }
+    }
+
+    // 2. Fallback to Default Global Schedule
+    if (config.openTime && config.closeTime) {
+        const [openH, openM] = config.openTime.split(':').map(Number);
+        const [closeH, closeM] = config.closeTime.split(':').map(Number);
+        const openMins = openH * 60 + openM;
+        const closeMins = closeH * 60 + closeM;
+        
+        let isOpen = false;
+        if (closeMins < openMins) {
+            isOpen = currentMins >= openMins || currentMins < closeMins;
+        } else {
+            isOpen = currentMins >= openMins && currentMins < closeMins;
+        }
+
+        if (!isOpen) return { isOpen: false, message: `ร้านปิด (เวลาทำการปกติ ${config.openTime} - ${config.closeTime})` };
+        return { isOpen: true, message: `เปิดทำการ (${config.openTime} - ${config.closeTime})` };
+    }
+
+    // 3. No Config = Always Open
+    return { isOpen: true, message: '' };
+};
+
+
 const App: React.FC = () => {
   const [menu, setMenu] = useState<MenuItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -115,7 +182,7 @@ const App: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   
   // Configurable Images State
-  const [sheetConfig, setSheetConfig] = useState<{logoUrl?: string, qrCodeUrl?: string, lineOaId?: string}>({});
+  const [sheetConfig, setSheetConfig] = useState<AppConfig>({});
   
   const [localLogo] = useState(() => getSafeStorage('app_logo'));
   const [localQr] = useState(() => getSafeStorage('app_qr'));
@@ -144,6 +211,9 @@ const App: React.FC = () => {
   const finalQrUrl = localQr || sheetConfig.qrCodeUrl || DEFAULT_QR;
   const finalLineId = cleanLineId(localLineId || sheetConfig.lineOaId);
 
+  // Shop Status
+  const [shopStatus, setShopStatus] = useState<ShopStatus>({ isOpen: true, message: '' });
+
   const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
   const [tempQuantity, setTempQuantity] = useState(1);
   const [tempNote, setTempNote] = useState('');
@@ -168,10 +238,19 @@ const App: React.FC = () => {
       const data = await fetchMenuFromSheet();
       setMenu(data.items);
       setSheetConfig(data.config);
+      setShopStatus(getShopStatus(data.config)); // Initial check
       setLoading(false);
     };
     loadData();
   }, []);
+
+  // Periodic Check for Open/Close status (every minute)
+  useEffect(() => {
+     const interval = setInterval(() => {
+         setShopStatus(getShopStatus(sheetConfig));
+     }, 60000);
+     return () => clearInterval(interval);
+  }, [sheetConfig]);
 
   useEffect(() => {
       if (showConfirmModal) setCopyStatus('idle');
@@ -357,6 +436,12 @@ const App: React.FC = () => {
   };
 
   const sendToLine = async () => {
+    // --- CHECK: SHOP OPEN STATUS ---
+    if (!shopStatus.isOpen) {
+        alert("ขออภัย ร้านปิดให้บริการ ไม่สามารถสั่งอาหารได้ในขณะนี้");
+        return;
+    }
+
     if (!customerName || !customerPhone || cart.length === 0) {
       alert("กรุณากรอกชื่อ เบอร์โทร และเลือกรายการอาหาร");
       return;
@@ -380,6 +465,13 @@ const App: React.FC = () => {
   };
 
   const handleOpenLine = async () => {
+        // --- TIME CHECK GUARD ---
+        if (!shopStatus.isOpen) {
+            alert(`⛔ ขออภัยครับ ร้านปิดให้บริการในขณะนี้ \n${shopStatus.message}\n\nกรุณาสั่งอาหารใหม่อีกครั้งในเวลาทำการครับ`);
+            setShowConfirmModal(false);
+            return; // CRITICAL: Stop here. Do not save to sheet. Do not open Line.
+        }
+
         setIsSavingOrder(true);
         try {
             const result = await saveOrderToSheet({
@@ -448,14 +540,30 @@ const App: React.FC = () => {
       
       {/* Sticky Header Group */}
       <div className="sticky top-0 z-50 bg-white shadow-md">
+        
+        {/* Closed Banner */}
+        {!shopStatus.isOpen && (
+            <div className="bg-red-500 text-white text-center py-2 px-4 text-sm font-bold shadow-inner flex items-center justify-center gap-2 animate-pulse">
+                <Clock size={16} />
+                <span>{shopStatus.message}</span>
+            </div>
+        )}
+
         <header className="px-4 py-2 flex items-center gap-2">
             <div className="flex items-center gap-3 mr-auto">
                 <div className="h-16 w-auto flex items-center justify-center shadow-sm hover:scale-105 transition-transform">
-                    <img src={finalLogoUrl} alt="SeoulGood Logo" className="h-full w-auto object-contain drop-shadow-md"/>
+                    <img src={finalLogoUrl} alt="SeoulGood Logo" className={`h-full w-auto object-contain drop-shadow-md ${!shopStatus.isOpen ? 'grayscale' : ''}`}/>
                 </div>
                 <div>
                      <h1 className="text-xl font-bold text-gray-800 leading-none tracking-tight">SeoulGood</h1>
-                     <p className="text-xs text-orange-600 font-medium mt-0.5">ต้นตำหรับอาหารเกาหลี</p>
+                     <div className="flex items-center gap-2 mt-0.5">
+                        <p className="text-xs text-orange-600 font-medium">ต้นตำหรับอาหารเกาหลี</p>
+                        {shopStatus.isOpen ? (
+                             <span className="bg-green-100 text-green-700 text-[10px] px-1.5 py-0.5 rounded font-bold border border-green-200">OPEN</span>
+                        ) : (
+                             <span className="bg-red-600 text-white text-[10px] px-1.5 py-0.5 rounded font-bold border border-red-600">CLOSED</span>
+                        )}
+                     </div>
                 </div>
             </div>
             
@@ -808,22 +916,36 @@ const App: React.FC = () => {
                                 </div>
                                 <p className="text-xs text-gray-400 mb-4">PromptPay</p>
                                 <div className="w-full max-w-sm">
-                                    <label className="block text-sm font-bold text-gray-700 mb-2">แนบสลิปการโอนเงิน (Attach Slip) <span className="text-red-500">*</span></label>
-                                    <input type="file" accept="image/*" className="hidden" ref={fileInputRef} onChange={handleSlipChange} />
-                                    {slipPreview ? (
-                                        <div className="relative w-full border-2 border-green-500 border-dashed rounded-xl p-2 bg-green-50">
-                                            <div className="h-48 w-full rounded-lg overflow-hidden bg-white mb-2">
-                                                <img src={slipPreview} alt="Slip Preview" className="w-full h-full object-contain" />
+                                    {/* --- UPDATED: Hide upload when closed --- */}
+                                    {!shopStatus.isOpen ? (
+                                        <div className="w-full h-32 border-2 border-red-100 bg-red-50 rounded-xl flex flex-col items-center justify-center text-red-500 gap-2 opacity-75 cursor-not-allowed">
+                                            <Lock size={32} />
+                                            <div className="text-center">
+                                                <p className="font-bold text-sm">ร้านปิดให้บริการ</p>
+                                                <p className="text-xs">{shopStatus.message}</p>
                                             </div>
-                                            <button onClick={removeSlip} className="w-full py-2 bg-white border border-red-200 text-red-600 rounded-lg hover:bg-red-50 transition flex items-center justify-center gap-2 text-sm font-medium"><Trash2 size={16}/> ลบรูปภาพ / เลือกใหม่</button>
-                                            <div className="absolute top-0 right-0 -mt-2 -mr-2 bg-green-500 text-white rounded-full p-1 shadow-sm"><ImageIcon size={14}/></div>
+                                            <p className="text-[10px] bg-white px-2 py-0.5 rounded border border-red-100">ปิดรับชำระเงินชั่วคราว</p>
                                         </div>
                                     ) : (
-                                        <button onClick={() => fileInputRef.current?.click()} disabled={isProcessingSlip} className="w-full h-32 border-2 border-gray-300 border-dashed rounded-xl flex flex-col items-center justify-center text-gray-500 hover:border-orange-500 hover:text-orange-600 hover:bg-orange-50 transition gap-2 disabled:opacity-50">
-                                            {isProcessingSlip ? <Loader2 className="animate-spin text-orange-500" size={32}/> : <Upload size={32} className="opacity-50"/>}
-                                            <span className="text-sm font-medium">{isProcessingSlip ? 'กำลังประมวลผลรูปภาพ...' : 'กดเพื่อเลือกรูปสลิป'}</span>
-                                            <span className="text-[10px] text-gray-400">(ระบบจะย่อขนาดภาพอัตโนมัติ)</span>
-                                        </button>
+                                        <>
+                                            <label className="block text-sm font-bold text-gray-700 mb-2">แนบสลิปการโอนเงิน (Attach Slip) <span className="text-red-500">*</span></label>
+                                            <input type="file" accept="image/*" className="hidden" ref={fileInputRef} onChange={handleSlipChange} />
+                                            {slipPreview ? (
+                                                <div className="relative w-full border-2 border-green-500 border-dashed rounded-xl p-2 bg-green-50">
+                                                    <div className="h-48 w-full rounded-lg overflow-hidden bg-white mb-2">
+                                                        <img src={slipPreview} alt="Slip Preview" className="w-full h-full object-contain" />
+                                                    </div>
+                                                    <button onClick={removeSlip} className="w-full py-2 bg-white border border-red-200 text-red-600 rounded-lg hover:bg-red-50 transition flex items-center justify-center gap-2 text-sm font-medium"><Trash2 size={16}/> ลบรูปภาพ / เลือกใหม่</button>
+                                                    <div className="absolute top-0 right-0 -mt-2 -mr-2 bg-green-500 text-white rounded-full p-1 shadow-sm"><ImageIcon size={14}/></div>
+                                                </div>
+                                            ) : (
+                                                <button onClick={() => fileInputRef.current?.click()} disabled={isProcessingSlip} className="w-full h-32 border-2 border-gray-300 border-dashed rounded-xl flex flex-col items-center justify-center text-gray-500 hover:border-orange-500 hover:text-orange-600 hover:bg-orange-50 transition gap-2 disabled:opacity-50">
+                                                    {isProcessingSlip ? <Loader2 className="animate-spin text-orange-500" size={32}/> : <Upload size={32} className="opacity-50"/>}
+                                                    <span className="text-sm font-medium">{isProcessingSlip ? 'กำลังประมวลผลรูปภาพ...' : 'กดเพื่อเลือกรูปสลิป'}</span>
+                                                    <span className="text-[10px] text-gray-400">(ระบบจะย่อขนาดภาพอัตโนมัติ)</span>
+                                                </button>
+                                            )}
+                                        </>
                                     )}
                                 </div>
                             </div>
@@ -839,8 +961,21 @@ const App: React.FC = () => {
                             <span className="text-gray-600 text-lg">ยอดรวมทั้งหมด</span>
                             <span className="text-3xl font-bold text-orange-600">{total} ฿</span>
                         </div>
-                        <button onClick={sendToLine} className={`w-full text-white py-4 rounded-xl font-bold text-xl shadow-lg transition flex items-center justify-center gap-2 bg-[#06C755] hover:bg-[#05b64d] active:scale-[0.98]`}>
-                            <Send size={24} /> ยืนยันการสั่งทาง LINE
+                        {/* --- UPDATED: Disable confirm button when closed --- */}
+                        <button 
+                            onClick={sendToLine} 
+                            disabled={!shopStatus.isOpen} 
+                            className={`w-full text-white py-4 rounded-xl font-bold text-xl shadow-lg transition flex items-center justify-center gap-2 ${
+                                !shopStatus.isOpen 
+                                ? 'bg-gray-400 cursor-not-allowed' 
+                                : 'bg-[#06C755] hover:bg-[#05b64d] active:scale-[0.98]'
+                            }`}
+                        >
+                            {!shopStatus.isOpen ? (
+                                <><Clock size={24} /> ร้านปิด (Closed)</>
+                            ) : (
+                                <><Send size={24} /> ยืนยันการสั่งทาง LINE</>
+                            )}
                         </button>
                     </div>
                 </div>
