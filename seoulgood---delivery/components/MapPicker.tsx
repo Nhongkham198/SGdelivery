@@ -5,24 +5,27 @@ import L from 'leaflet';
 import { Search, Store, Crosshair } from 'lucide-react';
 import { LocationState } from '../types';
 
-// --- FIX: Use CDN URLs instead of importing images directly ---
-// Browsers cannot import .png files directly without a bundler like Webpack/Vite.
-const iconUrl = 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png';
-const iconRetinaUrl = 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png';
-const shadowUrl = 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png';
+// --- Custom Colored Icons ---
+// Using leaflet-color-markers hosted on GitHub for reliability
+const shadowUrl = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png';
 
-// Configure default icon globally
-const DefaultIcon = L.icon({
-    iconUrl: iconUrl,
-    iconRetinaUrl: iconRetinaUrl,
-    shadowUrl: shadowUrl,
-    iconSize: [25, 41],
-    iconAnchor: [12, 41],
-    popupAnchor: [1, -34],
-    shadowSize: [41, 41]
+const RedIcon = new L.Icon({
+  iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
+  shadowUrl: shadowUrl,
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41]
 });
 
-L.Marker.prototype.options.icon = DefaultIcon;
+const GreenIcon = new L.Icon({
+  iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png',
+  shadowUrl: shadowUrl,
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41]
+});
 
 interface MapPickerProps {
   onLocationSelect: (loc: LocationState) => void;
@@ -85,7 +88,7 @@ const LocationMarker: React.FC<{ onSelect: (lat: number, lng: number) => void, p
   }, [map, position]);
 
   return position === null ? null : (
-    <Marker position={position}>
+    <Marker position={position} icon={GreenIcon}>
        <Popup>จุดส่งอาหาร (Delivery Point)</Popup>
     </Marker>
   );
@@ -182,11 +185,11 @@ export const MapPicker: React.FC<MapPickerProps> = ({ onLocationSelect, initialL
         {/* Controllers */}
         <MapController center={mapCenter} locateTrigger={locateTrigger} />
         
-        {/* User Selection Marker */}
+        {/* User Selection Marker (Green) */}
         <LocationMarker onSelect={handleSelect} position={position} />
         
-        {/* Fixed Store Marker */}
-        <Marker position={STORE_LOCATION}>
+        {/* Fixed Store Marker (Red) */}
+        <Marker position={STORE_LOCATION} icon={RedIcon}>
            <Popup autoPan={false}>
               <div className="text-center min-w-[120px]">
                  <strong className="text-orange-600 flex items-center gap-1 justify-center mb-1">
