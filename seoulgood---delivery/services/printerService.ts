@@ -6,7 +6,9 @@ export interface PrintOrderPayload {
   customerName: string;
   customerPhone: string;
   items: CartItem[];
-  total: number;
+  subtotal: number;      // New field
+  deliveryFee: number;   // New field
+  total: number;         // Grand Total
   note?: string;
   timestamp: string;
 }
@@ -38,7 +40,7 @@ export const sendToPrintServer = async (payload: PrintOrderPayload, serverUrl: s
     const lines: string[] = [];
 
     // Header
-    lines.push("SeoulGood Delivery"); // Big Text handled by server commands usually, but here we send content
+    lines.push("SeoulGood Delivery"); 
     lines.push("================================");
     lines.push(`Order ID: ${payload.orderId || 'Offline'}`);
     lines.push(`Time: ${payload.timestamp}`);
@@ -68,13 +70,14 @@ export const sendToPrintServer = async (payload: PrintOrderPayload, serverUrl: s
 
     lines.push("--------------------------------");
     
-    // Total
-    lines.push(`TOTAL: ${payload.total} THB`);
+    // Totals Calculation
+    lines.push(`Subtotal: ${payload.subtotal} THB`);
+    lines.push(`Delivery Fee: ${payload.deliveryFee} THB`);
+    lines.push(`GRAND TOTAL: ${payload.total} THB`);
     lines.push("================================");
     lines.push("\n"); // Extra feed
 
     // 2. Prepare payload matching server.js expectation
-    // server.js expects: { order: { orderId: ..., items: [...] }, paperSize: ... }
     const body = {
         order: {
             orderId: payload.orderId || 'NEW',

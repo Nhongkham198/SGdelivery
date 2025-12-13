@@ -409,7 +409,10 @@ const App: React.FC = () => {
       }
   };
 
-  const total = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  // --- CALCULATIONS: 14% Delivery Fee ---
+  const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  const deliveryFee = Math.round(subtotal * 0.14); // 14% rounded
+  const grandTotal = subtotal + deliveryFee;
   const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
 
   const generateLineMessage = (orderIdOverride?: string) => {
@@ -430,7 +433,11 @@ const App: React.FC = () => {
       if (item.note) msg += `\n   Note: ${item.note}`;
       msg += `\n   ${item.price * item.quantity}฿\n`;
     });
-    msg += `\n💰 *Total: ${total} THB*`;
+    msg += `\n------------------`;
+    msg += `\n💵 Subtotal: ${subtotal} THB`;
+    msg += `\n🛵 Delivery Fee: ${deliveryFee} THB`;
+    msg += `\n💰 *Grand Total: ${grandTotal} THB*`;
+    msg += `\n------------------`;
     msg += `\n🧾 Payment Slip: (Attached in Chat)`;
     return encodeURIComponent(msg);
   };
@@ -478,7 +485,7 @@ const App: React.FC = () => {
                 customerName,
                 customerPhone,
                 items: cart,
-                total: total,
+                total: grandTotal, // Save Grand Total to sheet
                 location: location
             });
             
@@ -495,7 +502,9 @@ const App: React.FC = () => {
                             customerName,
                             customerPhone,
                             items: cart,
-                            total: total,
+                            subtotal: subtotal,
+                            deliveryFee: deliveryFee,
+                            total: grandTotal,
                             note: '',
                             timestamp: new Date().toLocaleString('th-TH')
                         }, printerUrl);
@@ -756,7 +765,8 @@ const App: React.FC = () => {
                         <div className="bg-orange-100 text-orange-600 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold">{totalItems}</div>
                         <span className="text-sm">รายการในตะกร้า</span>
                     </div>
-                    <span className="text-2xl font-bold text-orange-600 leading-tight">{total} ฿</span>
+                    {/* Display GRAND TOTAL in sticky bar */}
+                    <span className="text-2xl font-bold text-orange-600 leading-tight">{grandTotal} ฿</span>
                 </div>
                 <button 
                     onClick={() => setIsCartOpen(true)}
@@ -957,10 +967,23 @@ const App: React.FC = () => {
             {cart.length > 0 && (
                 <div className="p-4 bg-white border-t border-gray-100 shadow-[0_-4px_10px_rgba(0,0,0,0.05)] shrink-0 z-50">
                     <div className="max-w-3xl mx-auto">
-                        <div className="flex justify-between items-center mb-4">
-                            <span className="text-gray-600 text-lg">ยอดรวมทั้งหมด</span>
-                            <span className="text-3xl font-bold text-orange-600">{total} ฿</span>
+                        
+                        {/* --- NEW: Summary Breakdown --- */}
+                        <div className="flex justify-between text-gray-600 mb-2 text-sm">
+                            <span>ค่าอาหาร (Subtotal)</span>
+                            <span>{subtotal} ฿</span>
                         </div>
+                        <div className="flex justify-between text-gray-600 mb-2 text-sm">
+                            <span>ค่าจัดส่ง (Delivery Fee)</span>
+                            <span>{deliveryFee} ฿</span>
+                        </div>
+                        {/* -------------------------------- */}
+
+                        <div className="flex justify-between items-center mb-4 pt-2 border-t border-gray-100">
+                            <span className="text-gray-800 font-bold text-lg">ยอดรวมทั้งหมด</span>
+                            <span className="text-3xl font-bold text-orange-600">{grandTotal} ฿</span>
+                        </div>
+                        
                         {/* --- UPDATED: Disable confirm button when closed --- */}
                         <button 
                             onClick={sendToLine} 
