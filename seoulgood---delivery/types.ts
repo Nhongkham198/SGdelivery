@@ -35,6 +35,7 @@ export interface AppConfig {
   closeTime?: string; // Default Close Time
   isManualClose?: boolean; // Master switch to close shop immediately
   schedules?: Record<number, DailySchedule>; // 0=Sun, 1=Mon, ..., 6=Sat
+  gp?: number; // GP Percentage from Google Sheet
 }
 
 export interface MenuData {

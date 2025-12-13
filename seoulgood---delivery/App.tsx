@@ -441,9 +441,10 @@ const App: React.FC = () => {
       }
   };
 
-  // --- CALCULATIONS: 14% Delivery Fee ---
+  // --- CALCULATIONS: GP Delivery Fee ---
+  const gpPercentage = sheetConfig.gp || 0; // Default to 0 if not set in sheet
   const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-  const deliveryFee = Math.round(subtotal * 0.14); // 14% rounded
+  const deliveryFee = Math.round(subtotal * (gpPercentage / 100)); // Calculate using GP
   const grandTotal = subtotal + deliveryFee;
   const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
 

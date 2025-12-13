@@ -166,16 +166,22 @@ export const fetchMenuFromSheet = async (): Promise<MenuData> => {
                       config.isManualClose = true;
                   }
               
-              // 3. Global Open/Close Times (Avoid confusing "Monday Open" with "Open Time")
+              // 3. Global Open/Close Times
               } else if ((lowerName.includes('open') || lowerName.includes('เปิด')) && !getDayIndex(name)) {
                    const t = formatTime(value);
                    if (t) config.openTime = t;
               } else if ((lowerName.includes('close') || lowerName.includes('ปิด')) && !getDayIndex(name)) {
                    const t = formatTime(value);
                    if (t) config.closeTime = t;
+
+              // 4. GP Extraction (New)
+              } else if (lowerName === 'gp' || lowerName.includes('gp')) {
+                  const raw = String(value).replace('%', '').trim();
+                  const val = parseFloat(raw);
+                  if (!isNaN(val)) config.gp = val;
               }
               
-              // 4. Specific Daily Schedules (Mon, Tue...)
+              // 5. Specific Daily Schedules (Mon, Tue...)
               const dayIndex = getDayIndex(name);
               if (dayIndex !== null) {
                   const schedule = parseScheduleValue(String(value));
