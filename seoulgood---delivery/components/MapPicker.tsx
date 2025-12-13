@@ -38,6 +38,16 @@ const STORE_LOCATION: [number, number] = [STORE_LAT, STORE_LNG];
 const MapController = ({ center, locateTrigger }: { center: L.LatLngExpression | null, locateTrigger: number }) => {
   const map = useMap();
   
+  // FIX: แก้ไขปัญหาแผนที่โหลดไม่สมบูรณ์ (เป็นสีเทาหรือขาดๆหายๆ) เมื่อแสดงใน Modal
+  // เหตุผล: Leaflet คำนวณขนาดผิดตอนที่ Modal กำลังเลื่อนขึ้นมา (Animation)
+  // วิธีแก้: สั่งให้คำนวณขนาดใหม่ (invalidateSize) หลังจากเวลาผ่านไปเล็กน้อย
+  useEffect(() => {
+    const timer = setTimeout(() => {
+        map.invalidateSize();
+    }, 500); // รอ 0.5 วินาทีเพื่อให้ Modal แสดงผลเสร็จสมบูรณ์
+    return () => clearTimeout(timer);
+  }, [map]);
+
   // Handle Search Center
   useEffect(() => {
     if (center) {
