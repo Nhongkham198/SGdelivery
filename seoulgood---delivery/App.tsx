@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { ShoppingCart, MapPin, Send, MessageSquare, X, Plus, Minus, Loader2, ChevronDown, QrCode, Upload, Image as ImageIcon, Trash2, ThumbsUp, Copy, Check, Store, RotateCcw, Printer, Settings, Lock, Clock } from 'lucide-react';
+import { ShoppingCart, MapPin, Send, MessageSquare, X, Plus, Minus, Loader2, ChevronDown, QrCode, Upload, Image as ImageIcon, Trash2, ThumbsUp, Copy, Check, Store, RotateCcw, Printer, Settings, Lock, Clock, Bike, UserPlus } from 'lucide-react';
 import { MenuItem, CartItem, LocationState, AppConfig } from './types';
 import { fetchMenuFromSheet } from './services/menuService';
 import { saveOrderToSheet } from './services/orderService';
@@ -215,6 +215,10 @@ const App: React.FC = () => {
   const [isPrinterAuth, setIsPrinterAuth] = useState(false);
   const [printerPinInput, setPrinterPinInput] = useState('');
 
+  // Banner Animation State
+  const [bannerIndex, setBannerIndex] = useState(0);
+  const [bannerFade, setBannerFade] = useState(true);
+
   const cleanLineId = (id: string | undefined | null) => {
       if (!id) return '';
       let str = id.trim();
@@ -283,6 +287,18 @@ const App: React.FC = () => {
      }, 60000);
      return () => clearInterval(interval);
   }, [sheetConfig]);
+
+  // --- BANNER ANIMATION LOGIC ---
+  useEffect(() => {
+    const interval = setInterval(() => {
+        setBannerFade(false); // Start Fade Out
+        setTimeout(() => {
+            setBannerIndex((prev) => (prev === 0 ? 1 : 0)); // Switch Message
+            setBannerFade(true); // Start Fade In
+        }, 500); // Wait for fade out to complete (0.5s)
+    }, 4500); // Total cycle time (4.5s)
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
       if (showConfirmModal) setCopyStatus('idle');
@@ -581,7 +597,7 @@ const App: React.FC = () => {
     <div className="min-h-screen pb-32 relative max-w-5xl mx-auto bg-gray-50 shadow-xl">
       
       {/* Sticky Header Group */}
-      <div className="sticky top-0 z-50 bg-white shadow-md">
+      <div className="sticky top-0 z-50 bg-gray-50 shadow-md">
         
         {/* Closed Banner */}
         {!shopStatus.isOpen && (
@@ -591,78 +607,96 @@ const App: React.FC = () => {
             </div>
         )}
 
-        <header className="px-4 py-2 flex items-center gap-2">
-            <div className="flex items-center gap-3 mr-auto">
-                <div className="h-16 w-auto flex items-center justify-center shadow-sm hover:scale-105 transition-transform">
-                    <img src={finalLogoUrl} alt="SeoulGood Logo" className={`h-full w-auto object-contain drop-shadow-md ${!shopStatus.isOpen ? 'grayscale' : ''}`}/>
+        <div className="bg-white">
+            <header className="px-4 py-2 flex items-center gap-2">
+                <div className="flex items-center gap-3 mr-auto">
+                    <div className="h-16 w-auto flex items-center justify-center shadow-sm hover:scale-105 transition-transform">
+                        <img src={finalLogoUrl} alt="SeoulGood Logo" className={`h-full w-auto object-contain drop-shadow-md ${!shopStatus.isOpen ? 'grayscale' : ''}`}/>
+                    </div>
+                    <div>
+                        <h1 className="text-xl font-bold text-gray-800 leading-none tracking-tight">SeoulGood</h1>
+                        <div className="flex items-center gap-2 mt-0.5">
+                            <p className="text-xs text-orange-600 font-medium">ต้นตำหรับอาหารเกาหลี</p>
+                            {shopStatus.isOpen ? (
+                                <span className="bg-green-100 text-green-700 text-[10px] px-1.5 py-0.5 rounded font-bold border border-green-200">OPEN</span>
+                            ) : (
+                                <span className="bg-red-600 text-white text-[10px] px-1.5 py-0.5 rounded font-bold border border-red-600">CLOSED</span>
+                            )}
+                        </div>
+                    </div>
                 </div>
-                <div>
-                     <h1 className="text-xl font-bold text-gray-800 leading-none tracking-tight">SeoulGood</h1>
-                     <div className="flex items-center gap-2 mt-0.5">
-                        <p className="text-xs text-orange-600 font-medium">ต้นตำหรับอาหารเกาหลี</p>
-                        {shopStatus.isOpen ? (
-                             <span className="bg-green-100 text-green-700 text-[10px] px-1.5 py-0.5 rounded font-bold border border-green-200">OPEN</span>
-                        ) : (
-                             <span className="bg-red-600 text-white text-[10px] px-1.5 py-0.5 rounded font-bold border border-red-600">CLOSED</span>
-                        )}
+                
+                {/* --- REMOVED SMALL BADGE HERE --- */}
+
+                <div className="flex gap-2 shrink-0 items-center">
+                    {/* Printer Settings Button */}
+                    <button 
+                        onClick={() => {
+                            setShowPrinterModal(true);
+                            setIsPrinterAuth(false);
+                            setPrinterPinInput('');
+                        }}
+                        className={`p-2 rounded-full border transition relative shadow-sm ${isPrinterOnline ? 'bg-white border-green-200 text-green-600 hover:bg-green-50' : 'bg-white border-red-200 text-red-400 hover:bg-red-50'}`}
+                        title={isPrinterOnline ? "Printer Online" : "Printer Offline"}
+                    >
+                        <Printer size={20} />
+                        <span className={`absolute top-0 right-0 -mt-1 -mr-1 w-3 h-3 rounded-full border-2 border-white ${isPrinterOnline ? 'bg-green-500' : 'bg-red-500'}`}></span>
+                    </button>
+
+                    {finalLineId && (
+                        <a href={`https://line.me/R/ti/p/${finalLineId}`} target="_blank" rel="noreferrer" className="p-2 rounded-full bg-[#06C755] text-white hover:bg-[#05b64d] transition flex items-center justify-center shadow-sm">
+                            <MessageSquare size={22} />
+                        </a>
+                    )}
+                </div>
+            </header>
+
+            <div className="border-b border-gray-100">
+                <div className="flex overflow-x-auto no-scrollbar py-3 px-4 gap-3">
+                    {categories.map(cat => (
+                        <button
+                            key={cat}
+                            onClick={() => setSelectedCategory(cat)}
+                            className={`whitespace-nowrap px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
+                                selectedCategory === cat 
+                                ? 'bg-orange-600 text-white shadow-md' 
+                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                            }`}
+                        >
+                            {cat}
+                        </button>
+                    ))}
+                </div>
+            </div>
+        </div>
+
+        {/* --- MOVED: Animated Delivery Banner to Sticky Section --- */}
+        <div className="px-4 pt-3 pb-1 bg-gray-50">
+            <div className="relative group overflow-hidden rounded-2xl bg-gradient-to-r from-orange-500 via-red-500 to-orange-500 p-0.5 shadow-lg">
+                <div className="absolute inset-0 bg-white/20 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
+                
+                {/* Content Container with Fade Transition */}
+                <div 
+                    className={`bg-white/10 backdrop-blur-sm rounded-xl py-3 flex items-center justify-center gap-2 text-white transition-opacity duration-500 ${bannerFade ? 'opacity-100' : 'opacity-0'}`}
+                >
+                     {/* Left Icon */}
+                     <div className={`animate-bounce bg-white p-1.5 rounded-full shadow-sm ${bannerIndex === 1 ? 'text-[#06C755]' : 'text-orange-600'}`}>
+                        {bannerIndex === 0 ? <Bike size={18} strokeWidth={2.5} /> : <UserPlus size={18} strokeWidth={2.5} />}
+                     </div>
+                     
+                     {/* Text */}
+                     <span className="font-extrabold text-xs md:text-base tracking-wide drop-shadow-sm text-center">
+                        {bannerIndex === 0 ? "ระบบนี้ใช้เฉพาะการส่ง Delivery เท่านั้น" : "เพิ่มเป็นเพื่อนใน Line OA เพื่อสั่งอาหารในระบบ"}
+                     </span>
+
+                     {/* Right Icon */}
+                     <div className={`animate-bounce bg-white p-1.5 rounded-full shadow-sm ${bannerIndex === 1 ? 'text-[#06C755]' : 'text-orange-600'}`} style={{ animationDelay: '150ms' }}>
+                        {bannerIndex === 0 ? <Bike size={18} strokeWidth={2.5} className="scale-x-[-1]" /> : <UserPlus size={18} strokeWidth={2.5} />}
                      </div>
                 </div>
             </div>
-            
-            {/* Delivery Only Badge - Restored */}
-            <div className="hidden sm:flex items-center">
-                <div className="bg-orange-50 border border-orange-100 rounded-lg px-3 py-1.5 flex items-center gap-2 shadow-sm">
-                    <div className="bg-orange-500 rounded-full p-1 shrink-0 flex items-center justify-center shadow-sm">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white" className="w-3 h-3">
-                             <path d="M19.5 6.5h-3c-1.1 0-2 .9-2 2v2.5h-3v-1c0-.55-.45-1-1-1s-1 .45-1 1v1H8v-1c0-.55-.45-1-1-1s-1 .45-1 1v2.35c-2.3.65-4 2.75-4 5.15 0 2.95 2.6 5.35 5.75 5.5h6.5c3.15-.15 5.75-2.55 5.75-5.5 0-2.4-1.7-4.5-4-5.15V8.5c0-.55-.45-1-1-1zm-11 9.5c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm10 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/>
-                        </svg>
-                    </div>
-                    <span className="text-[10px] sm:text-xs font-bold text-orange-700 leading-tight">
-                        ระบบนี้ใช้เฉพาะการส่ง Delivery เท่านั้น
-                    </span>
-                </div>
-            </div>
-
-            <div className="flex gap-2 shrink-0 items-center">
-                {/* Printer Settings Button */}
-                <button 
-                    onClick={() => {
-                        setShowPrinterModal(true);
-                        setIsPrinterAuth(false);
-                        setPrinterPinInput('');
-                    }}
-                    className={`p-2 rounded-full border transition relative shadow-sm ${isPrinterOnline ? 'bg-white border-green-200 text-green-600 hover:bg-green-50' : 'bg-white border-red-200 text-red-400 hover:bg-red-50'}`}
-                    title={isPrinterOnline ? "Printer Online" : "Printer Offline"}
-                >
-                    <Printer size={20} />
-                    <span className={`absolute top-0 right-0 -mt-1 -mr-1 w-3 h-3 rounded-full border-2 border-white ${isPrinterOnline ? 'bg-green-500' : 'bg-red-500'}`}></span>
-                </button>
-
-                {finalLineId && (
-                    <a href={`https://line.me/R/ti/p/${finalLineId}`} target="_blank" rel="noreferrer" className="p-2 rounded-full bg-[#06C755] text-white hover:bg-[#05b64d] transition flex items-center justify-center shadow-sm">
-                        <MessageSquare size={22} />
-                    </a>
-                )}
-            </div>
-        </header>
-
-        <div className="border-b border-gray-100">
-            <div className="flex overflow-x-auto no-scrollbar py-3 px-4 gap-3">
-                {categories.map(cat => (
-                    <button
-                        key={cat}
-                        onClick={() => setSelectedCategory(cat)}
-                        className={`whitespace-nowrap px-4 py-1.5 rounded-full text-sm font-medium transition-all ${
-                            selectedCategory === cat 
-                            ? 'bg-orange-600 text-white shadow-md' 
-                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                        }`}
-                    >
-                        {cat}
-                    </button>
-                ))}
-            </div>
         </div>
+
       </div>
 
       {/* Printer Settings Modal */}
@@ -741,7 +775,10 @@ const App: React.FC = () => {
       )}
 
       {/* Menu List */}
-      <main className="p-4 max-w-4xl mx-auto">
+      <main className="p-4 max-w-4xl mx-auto pt-2">
+        
+        {/* --- Removed Banner from here --- */}
+
         {!loading && menu.length === 0 && (
             <div className="text-center py-12 bg-white rounded-xl shadow-sm border border-red-100 p-6">
                 <Store size={48} className="mx-auto text-red-300 mb-4"/>
