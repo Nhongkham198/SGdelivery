@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { ShoppingCart, MapPin, Send, MessageSquare, X, Plus, Minus, Loader2, ChevronDown, QrCode, Upload, Image as ImageIcon, Trash2, ThumbsUp, Copy, Check, Store, RotateCcw, Printer, Settings, Lock, Clock, Bike, UserPlus } from 'lucide-react';
+import { ShoppingCart, MapPin, Send, MessageSquare, X, Plus, Minus, Loader2, ChevronDown, QrCode, Upload, Image as ImageIcon, Trash2, ThumbsUp, Copy, Check, Store, RotateCcw, Printer, Settings, Lock, Clock, Bike, UserPlus, AlertCircle } from 'lucide-react';
 import { MenuItem, CartItem, LocationState, AppConfig } from './types';
 import { fetchMenuFromSheet } from './services/menuService';
 import { saveOrderToSheet } from './services/orderService';
@@ -990,6 +990,14 @@ const App: React.FC = () => {
                         <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mt-4">
                             <div className="p-3 bg-green-50 border-b border-green-100 font-bold text-green-800 flex items-center gap-2"><QrCode size={18}/> ชำระเงิน (Payment)</div>
                             <div className="p-4 flex flex-col items-center">
+                                
+                                {/* --- NEW: Payment Confirmation Notice --- */}
+                                <div className="w-full bg-blue-50 border border-blue-100 rounded-xl p-3 mb-4 text-center">
+                                    <p className="text-xs text-blue-800 leading-relaxed">
+                                        <span className="font-bold inline-flex items-center gap-1"><AlertCircle size={12}/> คำชี้แจง:</span> ระบบการสั่งอาหารจะสมบูรณ์ก็ต่อเมื่อลูกค้าชำระเงินผ่าน QR code ของทางร้านเท่านั้น และระบบจะติดต่อกลับทาง Line OA เพื่อแจ้งยืนยันรับยอดค่ะ
+                                    </p>
+                                </div>
+
                                 <p className="text-sm text-gray-600 mb-3 text-center">สแกน QR Code เพื่อชำระเงิน</p>
                                 <div className="w-56 h-auto bg-white p-3 border border-gray-200 rounded-lg shadow-sm mb-4">
                                     <img src={finalQrUrl} alt="Payment QR Code" className="w-full h-full object-contain" />
