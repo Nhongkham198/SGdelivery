@@ -12,7 +12,7 @@ import { MapPicker } from './components/MapPicker';
 const DEFAULT_LOGO = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 350 140"><rect width="350" height="140" rx="20" fill="black"/><text x="25" y="60" fill="%23DC2626" font-family="Arial, sans-serif" font-weight="900" font-size="45">SEOUL</text><text x="25" y="110" fill="%23DC2626" font-family="Arial, sans-serif" font-weight="900" font-size="45">GOOD</text><text x="175" y="110" fill="white" font-family="Arial, sans-serif" font-weight="bold" font-size="28">โซลกู๊ด 서울굿</text><path d="M210 40 C210 20, 290 20, 290 40 L280 90 C280 110, 220 110, 220 90 Z" fill="%23D97706"/><path d="M200 45 L210 40 M290 40 L300 45" stroke="%23F59E0B" stroke-width="6" stroke-linecap="round"/><ellipse cx="250" cy="40" rx="40" ry="10" fill="%23FCD34D"/></svg>`;
 
 // QR Code Placeholder - Default value
-const DEFAULT_QR = "https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=PromptPay-SeoulGood-Payment&color=000000&bgcolor=ffffff";
+const DEFAULT_QR = "https://script.google.com/macros/s/AKfycbwqfQlMXQ_LIBAD9Fx4yGsXz1eXWtKoOSxvyR9NOnw2Wi_Y4MkTllUYQBJFTWmDDzM7/exec";
 
 // Helper for Safe Local Storage Access
 const getSafeStorage = (key: string) => {
