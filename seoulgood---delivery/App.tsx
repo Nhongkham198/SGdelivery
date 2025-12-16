@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { ShoppingCart, MapPin, Send, MessageSquare, X, Plus, Minus, Loader2, ChevronDown, QrCode, Upload, Image as ImageIcon, Trash2, ThumbsUp, Copy, Check, Store, RotateCcw, Printer, Settings, Lock, Clock, Bike, UserPlus, AlertCircle } from 'lucide-react';
+import { ShoppingCart, MapPin, Send, MessageSquare, X, Plus, Minus, Loader2, ChevronDown, QrCode, Upload, Image as ImageIcon, Trash2, ThumbsUp, Copy, Check, Store, RotateCcw, Printer, Settings, Lock, Clock, Bike, UserPlus, AlertCircle, UserCheck, Smile } from 'lucide-react';
 import { MenuItem, CartItem, LocationState, AppConfig } from './types';
 import { fetchMenuFromSheet } from './services/menuService';
 import { saveOrderToSheet } from './services/orderService';
@@ -218,6 +218,11 @@ const App: React.FC = () => {
   // Banner Animation State
   const [bannerIndex, setBannerIndex] = useState(0);
   const [bannerFade, setBannerFade] = useState(true);
+
+  // --- NEW STATES FOR FLOW ---
+  const [showFriendCheckModal, setShowFriendCheckModal] = useState(false);
+  const [showThankYouModal, setShowThankYouModal] = useState(false);
+  const [pendingLineUrl, setPendingLineUrl] = useState('');
 
   const cleanLineId = (id: string | undefined | null) => {
       if (!id) return '';
@@ -571,13 +576,47 @@ const App: React.FC = () => {
             } else {
                 targetUrl = `https://line.me/R/msg/text/?${message}`;
             }
-            window.location.href = targetUrl;
-            setTimeout(() => setShowConfirmModal(false), 2000);
+
+            // --- STOP REDIRECT HERE: SHOW FRIEND CHECK MODAL ---
+            setPendingLineUrl(targetUrl);
+            setShowConfirmModal(false);
+            setShowFriendCheckModal(true);
+
         } catch (e) {
             alert("เกิดข้อผิดพลาดในการบันทึกออเดอร์");
-        } finally {
             setIsSavingOrder(false);
         }
+  };
+
+  const handleFriendCheckYes = () => {
+      // Show Thank You, then Redirect
+      setShowFriendCheckModal(false);
+      setShowThankYouModal(true);
+
+      setTimeout(() => {
+          // Redirect to Line
+          window.location.href = pendingLineUrl;
+          
+          // Reset App State (Back to Main)
+          setCart([]);
+          setSlipPreview(null);
+          setLocation(null);
+          setCustomerName('');
+          setCustomerPhone('');
+          setIsCartOpen(false);
+          setIsSavingOrder(false);
+          setShowThankYouModal(false);
+      }, 3000); // Wait 3s for user to read
+  };
+
+  const handleFriendCheckNo = () => {
+      // Redirect to Add Friend
+      if (finalLineId) {
+          window.location.href = `https://line.me/R/ti/p/${finalLineId}`;
+      } else {
+          alert("ไม่พบ Line ID ของร้าน กรุณาติดต่อทางร้านโดยตรง");
+      }
+      // Note: User leaves app here. Flow ends for this session.
   };
 
   if (loading) {
@@ -1128,6 +1167,55 @@ const App: React.FC = () => {
                     </div>
                 </div>
             )}
+            
+            {/* Friend Check Modal */}
+            {showFriendCheckModal && (
+                <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
+                    <div className="bg-white rounded-2xl w-full max-w-sm p-6 shadow-2xl relative">
+                        <div className="text-center mb-6">
+                            <div className="bg-green-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <UserCheck size={32} className="text-green-600" />
+                            </div>
+                            <h3 className="font-bold text-xl text-gray-800 mb-2">คุณเป็นเพื่อนใน Line OA หรือยัง?</h3>
+                            <p className="text-sm text-gray-500">เพื่อไม่ให้พลาดการแจ้งเตือนสถานะออเดอร์ของคุณ</p>
+                        </div>
+                        
+                        <div className="space-y-3">
+                            <button 
+                                onClick={handleFriendCheckYes}
+                                className="w-full bg-[#06C755] hover:bg-[#05b64d] text-white py-3 rounded-xl font-bold text-lg shadow-md transition flex items-center justify-center gap-2"
+                            >
+                                <Check size={20} /> เป็นเพื่อนแล้ว (Yes)
+                            </button>
+                            <button 
+                                onClick={handleFriendCheckNo}
+                                className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 py-3 rounded-xl font-bold text-lg transition flex items-center justify-center gap-2 border border-gray-200"
+                            >
+                                <UserPlus size={20} /> ยังไม่เป็น (No)
+                            </button>
+                        </div>
+                        <p className="text-[10px] text-center text-gray-400 mt-4">* หากยังไม่เป็นเพื่อน กรุณากด "ยังไม่เป็น" เพื่อเพิ่มเพื่อนก่อน</p>
+                    </div>
+                </div>
+            )}
+
+            {/* Thank You Modal */}
+            {showThankYouModal && (
+                <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/90 backdrop-blur-md p-4 animate-in fade-in duration-300">
+                    <div className="text-center text-white p-6">
+                        <div className="bg-white text-orange-500 w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-6 shadow-xl animate-bounce">
+                            <Smile size={48} strokeWidth={2.5} />
+                        </div>
+                        <h2 className="text-3xl font-bold mb-4 drop-shadow-md">ขอบคุณที่ใช้บริการ</h2>
+                        <p className="text-xl text-orange-100">รอความอร่อยของเราสักครู่นะคะ ❤️</p>
+                        <div className="mt-8 flex justify-center">
+                            <Loader2 className="animate-spin opacity-50" size={32} />
+                        </div>
+                        <p className="text-sm text-gray-400 mt-2">กำลังนำทางไปที่ LINE...</p>
+                    </div>
+                </div>
+            )}
+
         </div>
       )}
     </div>
