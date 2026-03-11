@@ -1,10 +1,9 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { ShoppingCart, MapPin, Send, MessageSquare, X, Plus, Minus, Loader2, ChevronDown, QrCode, Upload, Image as ImageIcon, Trash2, ThumbsUp, Copy, Check, Store, RotateCcw, Printer, Settings, Lock, Clock, Bike, UserPlus, AlertCircle, UserCheck, Smile } from 'lucide-react';
+import { ShoppingCart, MapPin, Send, MessageSquare, X, Plus, Minus, Loader2, ChevronDown, QrCode, Upload, Image as ImageIcon, Trash2, ThumbsUp, Copy, Check, Store, RotateCcw, Settings, Lock, Clock, Bike, UserPlus, AlertCircle, UserCheck, Smile, Facebook } from 'lucide-react';
 import { MenuItem, CartItem, LocationState, AppConfig } from './types';
 import { fetchMenuFromSheet } from './services/menuService';
 import { saveOrderToSheet } from './services/orderService';
-import { checkServerHealth, sendToPrintServer } from './services/printerService';
 import { MapPicker } from './components/MapPicker';
 
 // --- Assets ---
@@ -206,15 +205,6 @@ const App: React.FC = () => {
   const [localQr] = useState(() => getSafeStorage('app_qr'));
   const [localLineId] = useState(() => getSafeStorage('app_line_id'));
 
-  // Printer State
-  const [printerUrl, setPrinterUrl] = useState(() => getSafeStorage('printer_url') || 'http://localhost:3000');
-  const [isPrinterOnline, setIsPrinterOnline] = useState(false);
-  const [showPrinterModal, setShowPrinterModal] = useState(false);
-  
-  // Printer Auth State
-  const [isPrinterAuth, setIsPrinterAuth] = useState(false);
-  const [printerPinInput, setPrinterPinInput] = useState('');
-
   // Banner Animation State
   const [bannerIndex, setBannerIndex] = useState(0);
   const [bannerFade, setBannerFade] = useState(true);
@@ -308,21 +298,6 @@ const App: React.FC = () => {
   useEffect(() => {
       if (showConfirmModal) setCopyStatus('idle');
   }, [showConfirmModal]);
-
-  // --- Auto Check Printer Server Health ---
-  useEffect(() => {
-      const checkStatus = async () => {
-          const status = await checkServerHealth(printerUrl);
-          setIsPrinterOnline(status);
-      };
-      
-      // Initial Check
-      checkStatus();
-      
-      // Periodic Check every 5 seconds
-      const interval = setInterval(checkStatus, 5000);
-      return () => clearInterval(interval);
-  }, [printerUrl]);
 
   const filteredMenu = useMemo(() => {
     if (selectedCategory === 'All') return menu;
@@ -446,22 +421,6 @@ const App: React.FC = () => {
       if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  const handlePrinterUrlSave = () => {
-      localStorage.setItem('printer_url', printerUrl);
-      setShowPrinterModal(false);
-      // Trigger immediate check
-      checkServerHealth(printerUrl).then(setIsPrinterOnline);
-  };
-
-  const handlePrinterLogin = () => {
-      if (printerPinInput === '198') {
-          setIsPrinterAuth(true);
-      } else {
-          alert("รหัสผ่านไม่ถูกต้อง (Incorrect PIN)");
-          setPrinterPinInput('');
-      }
-  };
-
   // --- CALCULATIONS: GP Delivery Fee ---
   const gpPercentage = sheetConfig.gp || 0; // Default to 0 if not set in sheet
   const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
@@ -547,26 +506,6 @@ const App: React.FC = () => {
             if (result.result === 'success' && result.orderNo) {
                 orderId = result.orderNo;
                 setCurrentOrderId(result.orderNo);
-
-                // --- Auto Print if Server is Online ---
-                if (isPrinterOnline) {
-                    try {
-                        await sendToPrintServer({
-                            orderId: orderId,
-                            customerName,
-                            customerPhone,
-                            items: cart,
-                            subtotal: subtotal,
-                            deliveryFee: deliveryFee,
-                            total: grandTotal,
-                            note: '',
-                            timestamp: new Date().toLocaleString('th-TH')
-                        }, printerUrl);
-                        console.log("Auto print command sent.");
-                    } catch (printErr) {
-                        console.error("Auto print failed:", printErr);
-                    }
-                }
             }
 
             const message = generateLineMessage(orderId);
@@ -668,19 +607,16 @@ const App: React.FC = () => {
                 {/* --- REMOVED SMALL BADGE HERE --- */}
 
                 <div className="flex gap-2 shrink-0 items-center">
-                    {/* Printer Settings Button */}
-                    <button 
-                        onClick={() => {
-                            setShowPrinterModal(true);
-                            setIsPrinterAuth(false);
-                            setPrinterPinInput('');
-                        }}
-                        className={`p-2 rounded-full border transition relative shadow-sm ${isPrinterOnline ? 'bg-white border-green-200 text-green-600 hover:bg-green-50' : 'bg-white border-red-200 text-red-400 hover:bg-red-50'}`}
-                        title={isPrinterOnline ? "Printer Online" : "Printer Offline"}
+                    {/* Facebook Button */}
+                    <a 
+                        href="https://www.facebook.com/profile.php?id=61577901211466" 
+                        target="_blank" 
+                        rel="noreferrer" 
+                        className="p-2 rounded-full bg-[#1877F2] text-white hover:bg-[#166fe5] transition flex items-center justify-center shadow-sm"
+                        title="Facebook"
                     >
-                        <Printer size={20} />
-                        <span className={`absolute top-0 right-0 -mt-1 -mr-1 w-3 h-3 rounded-full border-2 border-white ${isPrinterOnline ? 'bg-green-500' : 'bg-red-500'}`}></span>
-                    </button>
+                        <Facebook size={22} />
+                    </a>
 
                     {finalLineId && (
                         <a href={`https://line.me/R/ti/p/${finalLineId}`} target="_blank" rel="noreferrer" className="p-2 rounded-full bg-[#06C755] text-white hover:bg-[#05b64d] transition flex items-center justify-center shadow-sm">
@@ -737,81 +673,6 @@ const App: React.FC = () => {
         </div>
 
       </div>
-
-      {/* Printer Settings Modal */}
-      {showPrinterModal && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in">
-              <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm animate-in zoom-in-95">
-                  <div className="flex justify-between items-center mb-4">
-                      <h3 className="font-bold text-lg text-gray-800 flex items-center gap-2">
-                          <Printer size={20} className="text-orange-600"/> ตั้งค่าเครื่องพิมพ์ (Printer)
-                      </h3>
-                      <button onClick={() => setShowPrinterModal(false)} className="text-gray-400 hover:text-gray-600"><X size={20}/></button>
-                  </div>
-                  
-                  {!isPrinterAuth ? (
-                    // --- PIN LOCK SCREEN ---
-                    <div className="flex flex-col items-center justify-center py-4 animate-in fade-in">
-                        <div className="bg-orange-100 p-4 rounded-full mb-4">
-                            <Lock size={32} className="text-orange-600" />
-                        </div>
-                        <h4 className="text-gray-800 font-bold text-lg mb-1">กรุณาใส่รหัสผ่าน</h4>
-                        <p className="text-gray-500 text-sm mb-4">สำหรับพนักงานเท่านั้น</p>
-                        
-                        <input 
-                            type="password"
-                            placeholder="PIN Code"
-                            className="w-48 text-center text-2xl tracking-widest border border-gray-300 rounded-lg p-2 focus:ring-2 focus:ring-orange-500 outline-none mb-4"
-                            value={printerPinInput}
-                            onChange={(e) => setPrinterPinInput(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && handlePrinterLogin()}
-                            autoFocus
-                        />
-                        
-                        <button 
-                            onClick={handlePrinterLogin}
-                            className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-2 rounded-lg transition"
-                        >
-                            เข้าสู่ระบบ (Login)
-                        </button>
-                    </div>
-                  ) : (
-                    // --- SETTINGS SCREEN (Unlocked) ---
-                    <div className="animate-in fade-in">
-                        <div className="mb-4">
-                            <label className="block text-sm font-bold text-gray-700 mb-1">🔌 Print Server URL:</label>
-                            <input 
-                                type="text" 
-                                value={printerUrl} 
-                                onChange={(e) => setPrinterUrl(e.target.value)}
-                                className="w-full border border-gray-300 rounded p-2 text-sm focus:ring-2 focus:ring-orange-500 outline-none"
-                                placeholder="http://localhost:3000"
-                            />
-                        </div>
-
-                        <div className="flex flex-col gap-2">
-                            <button onClick={handlePrinterUrlSave} className="w-full bg-slate-700 hover:bg-slate-800 text-white py-2 rounded font-bold transition">
-                                บันทึก IP (Save)
-                            </button>
-                        </div>
-
-                        <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-center gap-2">
-                            <div className={`w-3 h-3 rounded-full ${isPrinterOnline ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
-                            <span className={`text-sm font-medium ${isPrinterOnline ? 'text-green-600' : 'text-red-500'}`}>
-                                {isPrinterOnline ? 'เชื่อมต่อ Server สำเร็จ' : 'เชื่อมต่อ Server ไม่ได้'}
-                            </span>
-                        </div>
-                        {!isPrinterOnline && (
-                            <p className="text-[10px] text-center text-gray-400 mt-2">
-                                * ตรวจสอบว่าเปิดโปรแกรม server.js หรือยัง <br/>
-                                * ตรวจสอบว่า IP ถูกต้องหรือไม่
-                            </p>
-                        )}
-                    </div>
-                  )}
-              </div>
-          </div>
-      )}
 
       {/* Menu List */}
       <main className="p-4 max-w-4xl mx-auto pt-2">
